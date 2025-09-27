@@ -1,0 +1,50 @@
+name: gamepadvirtual
+description: "Transforme seu celular em um gamepad universal com o GamePadVirtual, oferecendo layouts personalizáveis, feedback tátil imersivo e a flexibilidade de conectar-se via Bluetooth, Wi-Fi Direct ou USB para uma experiência de jogo sem"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  wakelock_plus: ^1.1.0
+  
+  flutter:
+    sdk: flutter
+    
+  # UI e Design
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.1.0
+  
+  # Conectividade
+  flutter_bluetooth_serial: ^0.4.0
+  usb_serial: 0.5.2        # NOVO - USB real
+  
+  # Sensores e Feedback
+  vibration: ^3.0.0
+  sensors_plus: ^7.0.0
+  
+  # Armazenamento
+  shared_preferences: ^2.0.0
+  
+  # Utilitários
+  path_provider: ^2.1.1     # NOVO - Para arquivos
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  
+  # Assets (verifique se o caminho do ícone está correto)
+  assets:
+    - assets/icons/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icons/dreamflow_icon.jpg
+  remove_alpha_ios: true
