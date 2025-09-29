@@ -6,11 +6,13 @@ import 'package:gamepadvirtual/models/custom_layout.dart';
 class StorageService {
   static const String _selectedLayoutKey = 'selected_layout';
   static const String _customLayoutsKey = 'custom_layouts';
-  static const String _vibrationEnabledKey = 'vibration_enabled';
+  // MODIFICADO: Renomeado para clareza
+  static const String _hapticFeedbackEnabledKey = 'haptic_feedback_enabled';
+  // ADICIONADO: Nova chave para a vibração do jogo (rumble)
+  static const String _rumbleEnabledKey = 'rumble_enabled';
   static const String _gyroscopeEnabledKey = 'gyroscope_enabled';
   static const String _accelerometerEnabledKey = 'accelerometer_enabled';
 
-  // Layout Selection
   Future<GamepadLayoutType> getSelectedLayout() async {
     final prefs = await SharedPreferences.getInstance();
     final layoutString = prefs.getString(_selectedLayoutKey);
@@ -28,7 +30,6 @@ class StorageService {
     await prefs.setString(_selectedLayoutKey, layout.toString());
   }
 
-  // Custom Layouts
   Future<List<CustomLayout>> getCustomLayouts() async {
     final prefs = await SharedPreferences.getInstance();
     final layoutsString = prefs.getStringList(_customLayoutsKey);
@@ -43,17 +44,12 @@ class StorageService {
   Future<void> saveCustomLayout(CustomLayout layout) async {
     final prefs = await SharedPreferences.getInstance();
     final layouts = await getCustomLayouts();
-    
-    // Remove existing layout with the same name
     layouts.removeWhere((existing) => existing.name == layout.name);
-    
-    // Add the new/updated layout
     layouts.add(layout);
-    
     final layoutStrings = layouts.map((l) => jsonEncode(l.toJson())).toList();
     await prefs.setStringList(_customLayoutsKey, layoutStrings);
   }
-
+  
   Future<void> deleteCustomLayout(String name) async {
     final prefs = await SharedPreferences.getInstance();
     final layouts = await getCustomLayouts();
@@ -63,24 +59,26 @@ class StorageService {
     await prefs.setStringList(_customLayoutsKey, layoutStrings);
   }
 
-  Future<CustomLayout?> getCustomLayout(String name) async {
-    final layouts = await getCustomLayouts();
-    try {
-      return layouts.firstWhere((layout) => layout.name == name);
-    } catch (e) {
-      return null;
-    }
+  // MODIFICADO: Renomeado para clareza
+  Future<bool> isHapticFeedbackEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_hapticFeedbackEnabledKey) ?? true;
   }
 
-  // Settings
-  Future<bool> isVibrationEnabled() async {
+  Future<void> setHapticFeedbackEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_vibrationEnabledKey) ?? true;
+    await prefs.setBool(_hapticFeedbackEnabledKey, enabled);
   }
 
-  Future<void> setVibrationEnabled(bool enabled) async {
+  // ADICIONADO: Métodos para a vibração do jogo
+  Future<bool> isRumbleEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_vibrationEnabledKey, enabled);
+    return prefs.getBool(_rumbleEnabledKey) ?? true;
+  }
+
+  Future<void> setRumbleEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_rumbleEnabledKey, enabled);
   }
 
   Future<bool> isGyroscopeEnabled() async {
@@ -101,11 +99,5 @@ class StorageService {
   Future<void> setAccelerometerEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_accelerometerEnabledKey, enabled);
-  }
-
-  // Clear all data
-  Future<void> clearAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
   }
 }

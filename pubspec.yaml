@@ -11,7 +11,12 @@ dependencies:
   
   flutter:
     sdk: flutter
-    
+
+
+  disable_battery_optimization: ^1.1.0
+
+  permission_handler: ^11.3.1
+
   # UI e Design
   cupertino_icons: ^1.0.8
   google_fonts: ^6.1.0
@@ -46,5 +51,5 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/icons/dreamflow_icon.jpg
+  image_path: assets/icons/icone.png
   remove_alpha_ios: true

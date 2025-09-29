@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Filtro para dispositivos USB genéricos HID (gamepads, controles) -->
+    <usb-device class="255" subclass="66" protocol="1" /> <!-- Dispositivos HID -->
+    <usb-device class="255" subclass="93" protocol="1" /> <!-- Dispositivos de entrada -->
+    <usb-device class="255" subclass="64" protocol="0" /> <!-- Gamepads genéricos -->
+    
+    <!-- IDs específicos de fabricantes comuns de gamepads -->
+    <usb-device vendor-id="1118" product-id="736" /> <!-- Xbox 360 -->
+    <usb-device vendor-id="1118" product-id="673" /> <!-- Xbox One -->
+    <usb-device vendor-id="1356" product-id="616" /> <!-- PlayStation -->
+    <usb-device vendor-id="1406" product-id="8201" /> <!-- Nintendo Switch -->
+    
+    <!-- Permitir qualquer dispositivo de entrada para testes -->
+    <usb-device class="3" /> <!-- Todos dispositivos HID -->
+</resources>

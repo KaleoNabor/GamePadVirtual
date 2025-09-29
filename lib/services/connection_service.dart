@@ -4,17 +4,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:gamepadvirtual/models/connection_state.dart';
+import 'package:gamepadvirtual/models/sensor_data.dart';
 import 'package:gamepadvirtual/services/gamepad_input_service.dart';
-import 'package:gamepadvirtual/services/vibration_service.dart'; // ADICIONADO
+import 'package:gamepadvirtual/services/vibration_service.dart';
 
 class GamepadInputData {
   final Map<String, bool> buttons;
   final Map<String, double> analogSticks;
+  final Map<String, dynamic> sensors;
   final DateTime timestamp;
 
   GamepadInputData({
     required this.buttons,
     required this.analogSticks,
+    required this.sensors,
     required this.timestamp,
   });
 
@@ -22,6 +25,7 @@ class GamepadInputData {
     return {
       'buttons': buttons,
       'analogSticks': analogSticks,
+      'sensors': sensors,
       'timestamp': timestamp.millisecondsSinceEpoch,
     };
   }
@@ -37,13 +41,19 @@ class ConnectionService {
   final StreamController<ConnectionState> _connectionStateController =
       StreamController<ConnectionState>.broadcast();
   final GamepadInputService _gamepadInputService = GamepadInputService();
-  final VibrationService _vibrationService = VibrationService(); // ADICIONADO
+  final VibrationService _vibrationService = VibrationService();
+
+  final StreamController<bool> _externalGamepadStatusController =
+      StreamController<bool>.broadcast();
 
   ConnectionState _currentState = ConnectionState.disconnected();
   BluetoothConnection? _bluetoothConnection;
   UsbPort? _usbPort;
   Timer? _heartbeatTimer;
   bool _isInitialized = false;
+
+  Stream<bool> get externalGamepadStatusStream =>
+      _externalGamepadStatusController.stream;
 
   Stream<ConnectionState> get connectionStateStream =>
       _connectionStateController.stream;
@@ -53,23 +63,19 @@ class ConnectionService {
     if (_isInitialized) return;
 
     await _gamepadInputService.initialize();
-    _gamepadInputService.connectionStream
-        .listen(_onExternalGamepadStateChanged);
     _isInitialized = true;
   }
 
   void _onExternalGamepadStateChanged(ConnectionState state) {
     if (state.isExternalGamepad && state.isConnected) {
-      _disconnectCurrent();
-      _updateConnectionState(state);
-      _startHeartbeat();
-    } else if (!state.isConnected && _currentState.isExternalGamepad) {
-      _updateConnectionState(ConnectionState.disconnected());
-      _stopHeartbeat();
+      // Em vez de desconectar, apenas notificamos que o modo gamepad externo está ATIVO
+      _externalGamepadStatusController.add(true);
+    } else if (!state.isConnected) {
+      // Notificamos que o modo gamepad externo está INATIVO
+      _externalGamepadStatusController.add(false);
     }
   }
 
-  // Bluetooth Methods
   Future<List<BluetoothDevice>> getBluetoothDevices() async {
     try {
       final isEnabled =
@@ -119,7 +125,6 @@ class ConnectionService {
 
         if (json['type'] == 'vibration') {
           final pattern = List<int>.from(json['pattern'] ?? [100]);
-          // MODIFICADO: Encaminhar para vibration service
           _vibrationService.vibratePattern(pattern);
         }
       } catch (e) {
@@ -131,7 +136,6 @@ class ConnectionService {
     });
   }
 
-  // USB Connection Methods
   Future<bool> connectToUSB() async {
     try {
       await _disconnectCurrent();
@@ -168,14 +172,6 @@ class ConnectionService {
     }
   }
   
-  // ADICIONADO: Método de simulação para Wi-Fi Direct
-  Future<void> connectToWifiDirect(String deviceName) async {
-    await _disconnectCurrent();
-    _updateConnectionState(ConnectionState.wifiDirectConnected(deviceName: deviceName));
-    // Não inicia heartbeat para a simulação
-  }
-
-
   void _startUSBListening() {
     _usbPort?.inputStream?.listen((Uint8List data) {
       try {
@@ -184,7 +180,6 @@ class ConnectionService {
 
         if (json['type'] == 'vibration') {
           final pattern = List<int>.from(json['pattern'] ?? [100]);
-          // MODIFICADO: Encaminhar para vibration service
           _vibrationService.vibratePattern(pattern);
         }
       } catch (e) {
@@ -193,13 +188,12 @@ class ConnectionService {
     });
   }
 
-  // Send gamepad input data
   Future<void> sendGamepadData(GamepadInputData data) async {
     if (!_currentState.isConnected) return;
 
     try {
       final jsonData = jsonEncode(data.toJson());
-
+      
       switch (_currentState.type) {
         case ConnectionType.bluetooth:
           if (_bluetoothConnection != null && _bluetoothConnection!.isConnected) {
@@ -214,10 +208,10 @@ class ConnectionService {
           }
           break;
         case ConnectionType.externalGamepad:
-          await _gamepadInputService.sendGamepadData(data.toJson());
           break;
-        // ADICIONADO: Case para Wi-Fi Direct (atualmente não envia dados)
+        // CORRIGIDO: Adicionado case para wifiDirect
         case ConnectionType.wifiDirect:
+          break;
         case ConnectionType.none:
           break;
       }
@@ -227,7 +221,6 @@ class ConnectionService {
     }
   }
 
-  // Disconnect from current connection
   Future<void> disconnect() async {
     await _disconnectCurrent();
     _updateConnectionState(ConnectionState.disconnected());
@@ -259,7 +252,6 @@ class ConnectionService {
 
   void _updateConnectionState(ConnectionState newState) {
     if (_currentState == newState) return;
-
     _currentState = newState;
     if (!_connectionStateController.isClosed) {
       _connectionStateController.add(newState);
@@ -282,7 +274,8 @@ class ConnectionService {
     if (!_currentState.isConnected) return;
 
     bool isConnected = false;
-
+    
+    // CORRIGIDO: Adicionado case para wifiDirect
     switch (_currentState.type) {
       case ConnectionType.bluetooth:
         isConnected = _bluetoothConnection?.isConnected ?? false;
@@ -293,20 +286,18 @@ class ConnectionService {
       case ConnectionType.externalGamepad:
         isConnected = _gamepadInputService.isExternalGamepadConnected;
         break;
-      case ConnectionType.wifiDirect: // ADICIONADO
-        isConnected = true; // Simulação sempre conectada
+      case ConnectionType.wifiDirect:
+        isConnected = true; // Simulação
         break;
       case ConnectionType.none:
         isConnected = false;
         break;
     }
-
     if (!isConnected) {
       await disconnect();
     }
   }
 
-  // Open system Bluetooth settings
   Future<void> openBluetoothSettings() async {
     try {
       await FlutterBluetoothSerial.instance.openSettings();

@@ -21,18 +21,28 @@ class GamepadInputService {
   ConnectionState _currentState = ConnectionState.disconnected();
 
   Future<void> initialize() async {
-    if (_isInitialized) return;
+  if (_isInitialized) return;
 
-    try {
-      _channel.setMethodCallHandler(_handleMethodCall);
-      await _channel.invokeMethod('initializeGamepadDetection');
-      _isInitialized = true;
+  try {
+    _channel.setMethodCallHandler(_handleMethodCall);
+    await _channel.invokeMethod('initializeGamepadDetection');
 
-      print('Gamepad Input Service inicializado');
-    } catch (e) {
-      print('Erro ao inicializar Gamepad Input Service: $e');
+    // CORREÇÃO: Pergunta ativamente ao código nativo se um gamepad já está conectado.
+    final dynamic initialState = await _channel.invokeMethod('getInitialGamepadState');
+    if (initialState != null) {
+      final deviceName = initialState['deviceName'] ?? 'Gamepad Externo';
+      _currentState =
+          ConnectionState.externalGamepadConnected(deviceName: deviceName);
+      _connectionController.add(_currentState);
     }
+    
+    _isInitialized = true;
+
+    print('Gamepad Input Service inicializado');
+  } catch (e) {
+    print('Erro ao inicializar Gamepad Input Service: $e');
   }
+}
 
   Future<dynamic> _handleMethodCall(MethodCall call) async {
     switch (call.method) {

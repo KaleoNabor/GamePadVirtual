@@ -5,6 +5,7 @@ import 'package:gamepadvirtual/services/connection_service.dart';
 import 'package:gamepadvirtual/widgets/connection_status.dart';
 import 'package:gamepadvirtual/screens/gamepad_screen.dart';
 import 'package:gamepadvirtual/screens/layout_selection_screen.dart';
+import 'package:gamepadvirtual/services/gamepad_input_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,22 +14,46 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+// Em lib/screens/home_screen.dart
+
 class _HomeScreenState extends State<HomeScreen> {
+  // ADICIONADO: Serviço para detectar o gamepad externo
+  final GamepadInputService _gamepadInputService = GamepadInputService();
   final ConnectionService _connectionService = ConnectionService();
-  models.ConnectionState _connectionState =
-      models.ConnectionState.disconnected();
-  // MODIFICADO: Removido estado local, usaremos o do _connectionState
-  // bool _hasExternalGamepad = false;
+
+  // Estado da conexão com o PC (BT/USB)
+  models.ConnectionState _connectionState = models.ConnectionState.disconnected();
+  // ADICIONADO: Estado do gamepad externo conectado ao celular
+  models.ConnectionState _externalGamepadState = models.ConnectionState.disconnected();
 
   @override
   void initState() {
     super.initState();
+    // Garante que o serviço de detecção seja inicializado
+    _gamepadInputService.initialize();
+
+    // Ouve o estado da conexão com o PC
     _connectionService.connectionStateStream.listen((state) {
       if (mounted) {
         setState(() {
           _connectionState = state;
         });
       }
+    });
+
+    // Ouve o estado do gamepad externo
+    _gamepadInputService.connectionStream.listen((state) {
+      if (mounted) {
+        setState(() {
+          _externalGamepadState = state;
+        });
+      }
+    });
+
+    // Pega o estado inicial de ambos os serviços
+    setState(() {
+      _connectionState = _connectionService.currentState;
+      _externalGamepadState = _gamepadInputService.currentState;
     });
   }
 
@@ -108,7 +133,6 @@ class _HomeScreenState extends State<HomeScreen> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 16),
-            // Bluetooth
             _buildConnectionOption(
               icon: Icons.bluetooth,
               title: 'Bluetooth',
@@ -116,7 +140,6 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: _showBluetoothDevices,
             ),
             const SizedBox(height: 12),
-            // WiFi Direct
             _buildConnectionOption(
               icon: Icons.wifi,
               title: 'Wi-Fi Direct',
@@ -124,7 +147,6 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: _showWifiDirectOptions,
             ),
             const SizedBox(height: 12),
-            // USB
             _buildConnectionOption(
               icon: Icons.usb,
               title: 'USB',
@@ -181,8 +203,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildExternalGamepadStatus() {
-    // MODIFICADO: Usa o estado de conexão real
-    final bool hasExternalGamepad = _connectionState.isExternalGamepad;
+    // MODIFICADO: Usa o estado de conexão do gamepad externo
+    final bool hasExternalGamepad = _externalGamepadState.isExternalGamepad && _externalGamepadState.isConnected;
 
     return Card(
       child: Padding(
@@ -311,8 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  // MODIFICADO: Exibe aviso sobre necessidade de app no PC.
+  
   void _showWifiDirectOptions() {
     showDialog(
       context: context,
@@ -359,7 +380,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // MODIFICADO: Exibe aviso sobre necessidade de app no PC.
   void _connectUSB() async {
     showDialog(
       context: context,
