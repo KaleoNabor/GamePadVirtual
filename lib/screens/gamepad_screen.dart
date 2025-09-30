@@ -45,6 +45,9 @@ class _GamepadScreenState extends State<GamepadScreen> {
   bool _gyroscopeEnabled = true;
   bool _accelerometerEnabled = true;
 
+  // BACKGROUND MODE STATE
+  bool _isBackgroundModeActive = false;
+
   // INPUT STATE
   final Map<ButtonType, bool> _buttonStates = {};
   double _leftStickX = 0, _leftStickY = 0;
@@ -75,28 +78,30 @@ class _GamepadScreenState extends State<GamepadScreen> {
   void dispose() {
     _sensorService.stopAllSensors();
     _unlockOrientation();
+    // Garante que o wakelock seja desativado ao sair da tela
     WakelockPlus.disable();
     super.dispose();
   }
 
   Future<void> _initializeGamepad() async {
     try {
-      // 1. Permissões são a primeira prioridade.
+      // 1. Permissões
       if (!(await _requestPermissions())) {
         print("Permissões necessárias não foram concedidas.");
         if (mounted) Navigator.pop(context);
         return;
       }
+      await _checkAndRequestBatteryOptimization();
 
-      // 2. Garante que o serviço do gamepad seja inicializado e aguarda sua conclusão.
+      // 2. Inicialização de Serviços
       await _gamepadInputService.initialize();
 
-      // 3. Configurações iniciais da tela e do estado (executadas apenas uma vez).
+      // 3. Configurações iniciais
       _lockToLandscape();
       _initializeAllButtonStates();
       await _loadSettings();
       
-      // 4. Configura os "ouvintes" (listeners) e busca o estado inicial dos serviços.
+      // 4. Listeners e estados iniciais
       _connectionService.connectionStateStream.listen((state) {
         if (mounted) setState(() => _connectionState = state);
       });
@@ -108,11 +113,23 @@ class _GamepadScreenState extends State<GamepadScreen> {
       if (mounted) setState(() => _externalGamepadState = _gamepadInputService.currentState);
 
       _gamepadInputService.inputStream.listen(_onExternalGamepadInput);
+      
+      _sensorService.gyroscopeStream.listen((gyroData) {
+        final bool isExternalMode = _externalGamepadState.isConnected && _externalGamepadState.isExternalGamepad;
+        if (_gyroscopeEnabled && !isExternalMode) {
+          setState(() {
+            const double sensitivity = 0.3;
+            _rightStickX = (gyroData.y * sensitivity).clamp(-1.0, 1.0);
+            _rightStickY = (-gyroData.x * sensitivity).clamp(-1.0, 1.0);
+          });
+          _sendGamepadData();
+        }
+      });
 
-      // 5. Inicia os sensores do celular que estiverem habilitados.
+      // 5. Sensores
       await _startEnabledSensors();
 
-      // 6. Carrega o layout do gamepad (Xbox, Custom, etc.).
+      // 6. Layout
       final layoutType = await _storageService.getSelectedLayout();
       if (layoutType == GamepadLayoutType.custom) {
         final customLayouts = await _storageService.getCustomLayouts();
@@ -131,7 +148,7 @@ class _GamepadScreenState extends State<GamepadScreen> {
     } catch (e) {
       print('Error initializing gamepad: $e');
     } finally {
-      // 7. Garante que o indicador de "carregando" seja desativado.
+      // 7. Finaliza o carregamento
       if (mounted) {
         setState(() {
           _isLoading = false; 
@@ -185,20 +202,49 @@ class _GamepadScreenState extends State<GamepadScreen> {
   Widget build(BuildContext context) {
     final bool isExternalMode = _externalGamepadState.isConnected && _externalGamepadState.isExternalGamepad;
 
-    return ExternalGamepadDetector(
-      connectionState: _externalGamepadState,
-      child: Scaffold(
-        backgroundColor: isExternalMode ? Colors.black : Theme.of(context).colorScheme.surface,
-        body: SafeArea(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : isExternalMode
-                  ? _buildExternalGamepadView()
-                  : _isCustomLayout
-                      ? _buildCustomGamepadView()
-                      : _buildPredefinedGamepadView(),
+    return Stack(
+      children: [
+        ExternalGamepadDetector(
+          connectionState: _externalGamepadState,
+          child: Scaffold(
+            backgroundColor: isExternalMode ? Colors.black : Theme.of(context).colorScheme.surface,
+            body: SafeArea(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : isExternalMode
+                      ? _buildExternalGamepadView()
+                      : _isCustomLayout
+                          ? _buildCustomGamepadView()
+                          : _buildPredefinedGamepadView(),
+            ),
+          ),
         ),
-      ),
+        if (_isBackgroundModeActive)
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _isBackgroundModeActive = false;
+                WakelockPlus.disable();
+              });
+            },
+            child: Container(
+              color: Colors.black.withOpacity(0.95),
+              alignment: Alignment.center,
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.eco, color: Colors.white30, size: 64),
+                  SizedBox(height: 16),
+                  Text(
+                    'Modo de economia de tela ativo.\nToque para voltar.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white30, fontSize: 16, decoration: TextDecoration.none),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
   
@@ -259,16 +305,35 @@ class _GamepadScreenState extends State<GamepadScreen> {
         padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
         child: Column(
           children: [
-            Align(
-              alignment: Alignment.topLeft,
-              child: IconButton(
-                onPressed: () {
-                  _unlockOrientation();
-                  Navigator.pop(context);
-                },
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                style: IconButton.styleFrom(backgroundColor: Colors.grey.shade800),
-              ),
+             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  onPressed: () {
+                    _unlockOrientation();
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  style: IconButton.styleFrom(backgroundColor: Colors.grey.shade800),
+                ),
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _isBackgroundModeActive = !_isBackgroundModeActive;
+                      // Ativa o Wakelock para manter a tela acesa (mas escura pelo overlay)
+                      WakelockPlus.toggle(enable: _isBackgroundModeActive);
+                    });
+                  },
+                  icon: Icon(
+                    _isBackgroundModeActive ? Icons.light_mode : Icons.dark_mode,
+                    color: Colors.white,
+                  ),
+                  tooltip: _isBackgroundModeActive 
+                      ? 'Sair do modo de economia de tela' 
+                      : 'Entrar no modo de economia de tela',
+                  style: IconButton.styleFrom(backgroundColor: Colors.grey.shade800),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             ConnectionStatusWidget(
@@ -296,7 +361,7 @@ class _GamepadScreenState extends State<GamepadScreen> {
                 children: [
                   Icon(Icons.smartphone, size: 32, color: Colors.green),
                   SizedBox(width: 16),
-                  Text( 'Você pode desligar a tela.\nO app continuará em segundo plano.', style: TextStyle(color: Colors.green, fontSize: 14), textAlign: TextAlign.center, ),
+                  Text( 'Ative o modo de economia para\nfuncionar com a "tela desligada".', style: TextStyle(color: Colors.green, fontSize: 14), textAlign: TextAlign.center, ),
                 ],
               ),
             ),
@@ -360,7 +425,9 @@ class _GamepadScreenState extends State<GamepadScreen> {
     );
   }
 
-  Widget _buildCustomGamepadView() {
+  // Em lib/screens/gamepad_screen.dart
+
+Widget _buildCustomGamepadView() {
     if (_customLayout == null) {
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Text('Layout customizado não encontrado.\nVoltando para o padrão.'), ElevatedButton(onPressed: () { _storageService.setSelectedLayout(GamepadLayoutType.xbox); _initializeGamepad(); }, child: const Text("Carregar Layout Padrão"))],));
     }
@@ -380,7 +447,12 @@ class _GamepadScreenState extends State<GamepadScreen> {
           Positioned(
             left: layout.rightStickPosition.x * screenSize.width,
             top: layout.rightStickPosition.y * screenSize.height,
-            child: AnalogStick( size: layout.rightStickPosition.size * screenSize.height, label: 'R', isLeft: false, onChanged: (x, y) { setState(() { _rightStickX = x; _rightStickY = y; }); _sendGamepadData(); }, ),
+            child: AnalogStick( size: layout.rightStickPosition.size * screenSize.height, label: 'R', isLeft: false, onChanged: (x, y) { 
+              if (!_gyroscopeEnabled) {
+                setState(() { _rightStickX = x; _rightStickY = y; }); 
+                _sendGamepadData();
+              }
+            }, ),
           ),
         ...layout.buttons.map((button) {
           final absolutePosition = ButtonPosition(
@@ -400,7 +472,9 @@ class _GamepadScreenState extends State<GamepadScreen> {
     );
   }
 
-  Widget _buildPredefinedGamepadView() {
+  // Em lib/screens/gamepad_screen.dart
+
+Widget _buildPredefinedGamepadView() {
     return Stack(
       children: [
         Positioned( top: 10, left: 10, child: IconButton( onPressed: () { _unlockOrientation(); Navigator.pop(context); }, icon: const Icon(Icons.arrow_back), style: IconButton.styleFrom(backgroundColor: Colors.white.withAlpha(230)), ), ),
@@ -410,7 +484,13 @@ class _GamepadScreenState extends State<GamepadScreen> {
         Positioned(left: 60, top: 60, child: _buildTriggerButton('L2', ButtonType.leftTrigger)),
         Positioned(left: 60, top: 95, child: _buildShoulderButton('L1', ButtonType.leftBumper)),
         Positioned(left: 130, bottom: 20, child: _buildStickButton('L3', ButtonType.leftStickButton)),
-        Positioned(right: 40, bottom: 40, child: AnalogStick(size: 120, label: 'R', isLeft: false, onChanged: (x, y) { setState(() { _rightStickX = x; _rightStickY = y; }); _sendGamepadData(); },)),
+        Positioned(right: 40, bottom: 40, child: AnalogStick(size: 120, label: 'R', isLeft: false, onChanged: (x, y) {
+          // Bloqueia o controle de toque do analógico direito se o giroscópio estiver ativo
+          if (!_gyroscopeEnabled) {
+            setState(() { _rightStickX = x; _rightStickY = y; }); 
+            _sendGamepadData();
+          }
+        },)),
         Positioned(right: 180, bottom: 60, child: _buildActionButtons()),
         Positioned(right: 60, top: 60, child: _buildTriggerButton('R2', ButtonType.rightTrigger)),
         Positioned(right: 60, top: 95, child: _buildShoulderButton('R1', ButtonType.rightBumper)),
@@ -419,9 +499,10 @@ class _GamepadScreenState extends State<GamepadScreen> {
       ],
     );
   }
+  
+  // MÉTODOS AUXILIARES PARA CONSTRUIR OS BOTÕES
 
   Widget _buildDynamicButton(CustomLayoutButton button) {
-    final isPressed = _buttonStates[button.type] ?? false;
     final isShoulder = _isShoulderButton(button.type);
     final isDpad = _isDpad(button.type);
     final isSystem = button.type == ButtonType.select || button.type == ButtonType.start;
@@ -443,6 +524,7 @@ class _GamepadScreenState extends State<GamepadScreen> {
 
   bool _isShoulderButton(ButtonType t) => t == ButtonType.leftBumper || t == ButtonType.rightBumper || t == ButtonType.leftTrigger || t == ButtonType.rightTrigger;
   bool _isDpad(ButtonType t) => t == ButtonType.dpadUp || t == ButtonType.dpadDown || t == ButtonType.dpadLeft || t == ButtonType.dpadRight;
+  
   Widget _buildButtonChild(CustomLayoutButton button) {
     Color textColor = _getTextColor(Color(button.color));
     double size = button.position.size;
@@ -459,15 +541,155 @@ class _GamepadScreenState extends State<GamepadScreen> {
     return Text( button.label, style: TextStyle( color: textColor, fontWeight: FontWeight.bold, fontSize: size * 0.5, ), );
   }
 
-  Widget _buildDPad() { return SizedBox( width: 120, height: 120, child: Stack( children: [ Positioned(top: 0, left: 40, child: _buildDirectionalButton(Icons.keyboard_arrow_up, ButtonType.dpadUp)), Positioned(bottom: 0, left: 40, child: _buildDirectionalButton(Icons.keyboard_arrow_down, ButtonType.dpadDown)), Positioned(left: 0, top: 40, child: _buildDirectionalButton(Icons.keyboard_arrow_left, ButtonType.dpadLeft)), Positioned(right: 0, top: 40, child: _buildDirectionalButton(Icons.keyboard_arrow_right, ButtonType.dpadRight)), ], ), ); }
-  Widget _buildActionButtons() { final buttons = _predefinedLayout.buttons; return SizedBox( width: 120, height: 120, child: Stack( children: [ if (buttons.isNotEmpty) Positioned(top: 0, left: 40, child: _buildGamepadButton(buttons[0])), if (buttons.length > 1) Positioned(right: 0, top: 40, child: _buildGamepadButton(buttons[1])), if (buttons.length > 2) Positioned(bottom: 0, left: 40, child: _buildGamepadButton(buttons[2])), if (buttons.length > 3) Positioned(left: 0, top: 40, child: _buildGamepadButton(buttons[3])), ], ), ); }
-  Widget _buildGamepadButton(GamepadButton button) { final isPressed = _buttonStates[button.type] ?? false; return GestureDetector( onTapDown: (_) => _onButtonPressed(button.type), onTapUp: (_) => _onButtonReleased(button.type), onTapCancel: () => _onButtonReleased(button.type), child: Container( width: 44, height: 44, decoration: BoxDecoration( color: Color(button.color), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2), boxShadow: isPressed ? [] : [ BoxShadow(color: Colors.black.withAlpha(77), blurRadius: 4, offset: const Offset(0, 2)) ], ), child: Center( child: Text(button.label, style: TextStyle(color: _getTextColor(Color(button.color)), fontWeight: FontWeight.bold, fontSize: 18)), ), ), ); }
-  Widget _buildDirectionalButton(IconData icon, ButtonType buttonType) { final isPressed = _buttonStates[buttonType] ?? false; return GestureDetector( onTapDown: (_) => _onButtonPressed(buttonType), onTapUp: (_) => _onButtonReleased(buttonType), onTapCancel: () => _onButtonReleased(buttonType), child: Container( width: 40, height: 40, decoration: BoxDecoration( color: isPressed ? Colors.grey.shade600 : Colors.grey.shade800, borderRadius: BorderRadius.circular(8), ), child: Icon(icon, color: Colors.white, size: 24), ), ); }
-  Widget _buildShoulderButton(String label, ButtonType buttonType) { final isPressed = _buttonStates[buttonType] ?? false; return GestureDetector( onTapDown: (_) => _onButtonPressed(buttonType), onTapUp: (_) => _onButtonReleased(buttonType), onTapCancel: () => _onButtonReleased(buttonType), child: Container( width: 100, height: 40, decoration: BoxDecoration( color: isPressed ? Colors.grey.shade600 : Colors.grey.shade800, borderRadius: BorderRadius.circular(12), ), child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold))), ), ); }
-  Widget _buildTriggerButton(String label, ButtonType buttonType) { final isPressed = _buttonStates[buttonType] ?? false; return GestureDetector( onTapDown: (_) => _onButtonPressed(buttonType), onTapUp: (_) => _onButtonReleased(buttonType), onTapCancel: () => _onButtonReleased(buttonType), child: Container( width: 90, height: 30, decoration: BoxDecoration( color: isPressed ? Colors.grey.shade500 : Colors.grey.shade700, borderRadius: BorderRadius.circular(10), ), child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))), ), ); }
-  Widget _buildStickButton(String label, ButtonType buttonType) { final isPressed = _buttonStates[buttonType] ?? false; return GestureDetector( onTapDown: (_) => _onButtonPressed(buttonType), onTapUp: (_) => _onButtonReleased(buttonType), onTapCancel: () => _onButtonReleased(buttonType), child: Container( width: 40, height: 40, decoration: BoxDecoration( color: isPressed ? Colors.blue.shade600 : Colors.grey.shade800, shape: BoxShape.circle, ), child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))), ), ); }
-  Widget _buildSystemButton(String label, ButtonType buttonType) { final isPressed = _buttonStates[buttonType] ?? false; return GestureDetector( onTapDown: (_) => _onButtonPressed(buttonType), onTapUp: (_) => _onButtonReleased(buttonType), onTapCancel: () => _onButtonReleased(buttonType), child: Container( width: 80, height: 25, decoration: BoxDecoration( color: isPressed ? Colors.grey.shade600 : Colors.grey.shade800, borderRadius: BorderRadius.circular(20), ), child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))), ), ); }
-  Color _getTextColor(Color backgroundColor) { return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white; }
+  Widget _buildDPad() { 
+    return SizedBox( 
+      width: 120, 
+      height: 120, 
+      child: Stack( 
+        children: [ 
+          Positioned(top: 0, left: 40, child: _buildDirectionalButton(Icons.keyboard_arrow_up, ButtonType.dpadUp)), 
+          Positioned(bottom: 0, left: 40, child: _buildDirectionalButton(Icons.keyboard_arrow_down, ButtonType.dpadDown)), 
+          Positioned(left: 0, top: 40, child: _buildDirectionalButton(Icons.keyboard_arrow_left, ButtonType.dpadLeft)), 
+          Positioned(right: 0, top: 40, child: _buildDirectionalButton(Icons.keyboard_arrow_right, ButtonType.dpadRight)), 
+        ], 
+      ), 
+    ); 
+  }
+
+  Widget _buildActionButtons() { 
+    final buttons = _predefinedLayout.buttons; 
+    return SizedBox( 
+      width: 120, 
+      height: 120, 
+      child: Stack( 
+        children: [ 
+          if (buttons.isNotEmpty) Positioned(top: 0, left: 40, child: _buildGamepadButton(buttons[0])), 
+          if (buttons.length > 1) Positioned(right: 0, top: 40, child: _buildGamepadButton(buttons[1])), 
+          if (buttons.length > 2) Positioned(bottom: 0, left: 40, child: _buildGamepadButton(buttons[2])), 
+          if (buttons.length > 3) Positioned(left: 0, top: 40, child: _buildGamepadButton(buttons[3])), 
+        ], 
+      ), 
+    ); 
+  }
+
+  Widget _buildGamepadButton(GamepadButton button) { 
+    final isPressed = _buttonStates[button.type] ?? false; 
+    return GestureDetector( 
+      onTapDown: (_) => _onButtonPressed(button.type), 
+      onTapUp: (_) => _onButtonReleased(button.type), 
+      onTapCancel: () => _onButtonReleased(button.type), 
+      child: Container( 
+        width: 44, 
+        height: 44, 
+        decoration: BoxDecoration( 
+          color: Color(button.color), 
+          shape: BoxShape.circle, 
+          border: Border.all(color: Colors.white, width: 2), 
+          boxShadow: isPressed ? [] : [ BoxShadow(color: Colors.black.withAlpha(77), blurRadius: 4, offset: const Offset(0, 2)) ], 
+        ), 
+        child: Center( 
+          child: Text(
+            button.label, 
+            style: TextStyle(color: _getTextColor(Color(button.color)), fontWeight: FontWeight.bold, fontSize: 18)
+          ), 
+        ), 
+      ), 
+    ); 
+  }
+  
+  Widget _buildDirectionalButton(IconData icon, ButtonType buttonType) { 
+    final isPressed = _buttonStates[buttonType] ?? false; 
+    return GestureDetector( 
+      onTapDown: (_) => _onButtonPressed(buttonType), 
+      onTapUp: (_) => _onButtonReleased(buttonType), 
+      onTapCancel: () => _onButtonReleased(buttonType), 
+      child: Container( 
+        width: 40, 
+        height: 40, 
+        decoration: BoxDecoration( 
+          color: isPressed ? Colors.grey.shade600 : Colors.grey.shade800, 
+          borderRadius: BorderRadius.circular(8), 
+        ), 
+        child: Icon(icon, color: Colors.white, size: 24), 
+      ), 
+    ); 
+  }
+
+  Widget _buildShoulderButton(String label, ButtonType buttonType) { 
+    final isPressed = _buttonStates[buttonType] ?? false; 
+    return GestureDetector( 
+      onTapDown: (_) => _onButtonPressed(buttonType), 
+      onTapUp: (_) => _onButtonReleased(buttonType), 
+      onTapCancel: () => _onButtonReleased(buttonType), 
+      child: Container( 
+        width: 100, 
+        height: 40, 
+        decoration: BoxDecoration( 
+          color: isPressed ? Colors.grey.shade600 : Colors.grey.shade800, 
+          borderRadius: BorderRadius.circular(12), 
+        ), 
+        child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold))), 
+      ), 
+    ); 
+  }
+
+  Widget _buildTriggerButton(String label, ButtonType buttonType) { 
+    final isPressed = _buttonStates[buttonType] ?? false; 
+    return GestureDetector( 
+      onTapDown: (_) => _onButtonPressed(buttonType), 
+      onTapUp: (_) => _onButtonReleased(buttonType), 
+      onTapCancel: () => _onButtonReleased(buttonType), 
+      child: Container( 
+        width: 90, 
+        height: 30, 
+        decoration: BoxDecoration( 
+          color: isPressed ? Colors.grey.shade500 : Colors.grey.shade700, 
+          borderRadius: BorderRadius.circular(10), 
+        ), 
+        child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))), 
+      ), 
+    ); 
+  }
+
+  Widget _buildStickButton(String label, ButtonType buttonType) { 
+    final isPressed = _buttonStates[buttonType] ?? false; 
+    return GestureDetector( 
+      onTapDown: (_) => _onButtonPressed(buttonType), 
+      onTapUp: (_) => _onButtonReleased(buttonType), 
+      onTapCancel: () => _onButtonReleased(buttonType), 
+      child: Container( 
+        width: 40, 
+        height: 40, 
+        decoration: BoxDecoration( 
+          color: isPressed ? Colors.blue.shade600 : Colors.grey.shade800, 
+          shape: BoxShape.circle, 
+        ), 
+        child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))), 
+      ), 
+    ); 
+  }
+
+  Widget _buildSystemButton(String label, ButtonType buttonType) { 
+    final isPressed = _buttonStates[buttonType] ?? false; 
+    return GestureDetector( 
+      onTapDown: (_) => _onButtonPressed(buttonType), 
+      onTapUp: (_) => _onButtonReleased(buttonType), 
+      onTapCancel: () => _onButtonReleased(buttonType), 
+      child: Container( 
+        width: 80, 
+        height: 25, 
+        decoration: BoxDecoration( 
+          color: isPressed ? Colors.grey.shade600 : Colors.grey.shade800, 
+          borderRadius: BorderRadius.circular(20), 
+        ), 
+        child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))), 
+      ), 
+    ); 
+  }
+
+  Color _getTextColor(Color backgroundColor) { 
+    return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white; 
+  }
 
   void _onButtonPressed(ButtonType buttonType) { setState(() => _buttonStates[buttonType] = true); if (_hapticFeedbackEnabled) _vibrationService.vibrateForButton(); _sendGamepadData(); }
   void _onButtonReleased(ButtonType buttonType) { setState(() => _buttonStates[buttonType] = false); _sendGamepadData(); }

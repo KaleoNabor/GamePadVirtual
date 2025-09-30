@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:usb_serial/usb_serial.dart';
 import 'package:gamepadvirtual/models/connection_state.dart';
-import 'package:gamepadvirtual/models/sensor_data.dart';
 import 'package:gamepadvirtual/services/gamepad_input_service.dart';
 import 'package:gamepadvirtual/services/vibration_service.dart';
 

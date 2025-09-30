@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:gamepadvirtual/services/storage_service.dart';
-import 'package:gamepadvirtual/models/sensor_data.dart';
 
 class SensorData {
   final double x;

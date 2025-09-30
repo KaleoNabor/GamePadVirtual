@@ -236,7 +236,7 @@ class _CustomLayoutEditorScreenState extends State<CustomLayoutEditorScreen> {
       return AnalogStick( size: pixelSize, label: component == _leftStickPosition ? 'L' : 'R', isLeft: component == _leftStickPosition, onChanged: (x,y) {}, );
     }
     
-    final button = component as CustomLayoutButton;
+    final button = component;
     final isShoulder = _isShoulderButton(button.type);
     final isSystem = button.type == ButtonType.select || button.type == ButtonType.start;
     final isDpad = _isDpad(button.type);
@@ -283,7 +283,7 @@ class _CustomLayoutEditorScreenState extends State<CustomLayoutEditorScreen> {
 
     return componentsToHighlight.map((component) {
       final ButtonPosition relativePos = (component is CustomLayoutButton) ? component.position : component as ButtonPosition;
-      final bool isCircular = !(component is CustomLayoutButton) || (!_isShoulderButton(component.type) && component.type != ButtonType.select && component.type != ButtonType.start && !_isDpad(component.type));
+      final bool isCircular = component is! CustomLayoutButton || (!_isShoulderButton(component.type) && component.type != ButtonType.select && component.type != ButtonType.start && !_isDpad(component.type));
       
       final pixelX = relativePos.x * _canvasConstraints!.maxWidth;
       final pixelY = relativePos.y * _canvasConstraints!.maxHeight;
@@ -346,7 +346,11 @@ class _CustomLayoutEditorScreenState extends State<CustomLayoutEditorScreen> {
                 Text('Conjunto de Ação (exclusivo)', style: Theme.of(context).textTheme.titleMedium),
                 Card( child: Column( children: [ RadioListTile<ActionButtonStyle>( title: const Text('Xbox (A, B, X, Y)'), value: ActionButtonStyle.xbox, groupValue: _actionStyle, onChanged: (v) { setMenuState(() => _actionStyle = v ?? ActionButtonStyle.xbox); _setActionStyle(v ?? ActionButtonStyle.xbox); }, ), RadioListTile<ActionButtonStyle>( title: const Text('Nintendo (A, B, X, Y)'), value: ActionButtonStyle.nintendo, groupValue: _actionStyle, onChanged: (v) { setMenuState(() => _actionStyle = v ?? ActionButtonStyle.nintendo); _setActionStyle(v ?? ActionButtonStyle.nintendo); }, ), RadioListTile<ActionButtonStyle>( title: const Text('PlayStation (△ ○ ✕ □)'), value: ActionButtonStyle.playstation, groupValue: _actionStyle, onChanged: (v) { setMenuState(() => _actionStyle = v ?? ActionButtonStyle.playstation); _setActionStyle(v ?? ActionButtonStyle.playstation); }, ), RadioListTile<ActionButtonStyle>( title: const Text('Nenhum'), value: ActionButtonStyle.none, groupValue: _actionStyle, onChanged: (v) { setMenuState(() => _actionStyle = v ?? ActionButtonStyle.none); _setActionStyle(v ?? ActionButtonStyle.none); }, ), ], ), ),
                 const Divider(),
-                SwitchListTile( title: const Text('D‑Pad (conjunto)'), subtitle: const Text('Habilita as setas como um grupo'), value: _dpadEnabled, onChanged: (value) { setState(() { _dpadEnabled = value; if (value) _addDpadGroup(); else _removeDpadGroup(); }); setMenuState(() {}); },),
+                SwitchListTile( title: const Text('D‑Pad (conjunto)'), subtitle: const Text('Habilita as setas como um grupo'), value: _dpadEnabled, onChanged: (value) { setState(() { _dpadEnabled = value; if (value) {
+                  _addDpadGroup();
+                } else {
+                  _removeDpadGroup();
+                } }); setMenuState(() {}); },),
                 ..._availableButtons.entries.map((entry) {
                   final btnType = entry.key;
                   final isEnabled = _buttons.any((b) => b.type == btnType);
@@ -355,7 +359,11 @@ class _CustomLayoutEditorScreenState extends State<CustomLayoutEditorScreen> {
                     value: isEnabled,
                     onChanged: (value) {
                       setState(() {
-                        if (value) _addButton(btnType); else _removeButton(btnType);
+                        if (value) {
+                          _addButton(btnType);
+                        } else {
+                          _removeButton(btnType);
+                        }
                       });
                       setMenuState(() {});
                     },
