@@ -12,7 +12,7 @@ import 'package:gamepadvirtual/widgets/connection_status.dart';
 import 'package:gamepadvirtual/widgets/analog_stick.dart';
 import 'package:gamepadvirtual/widgets/external_gamepad_detector.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:permission_handler/permission_handler.dart'; // Importe o permission_handler
 import 'package:disable_battery_optimization/disable_battery_optimization.dart';
 
 class GamepadScreen extends StatefulWidget {
@@ -47,6 +47,9 @@ class _GamepadScreenState extends State<GamepadScreen> {
 
   // BACKGROUND MODE STATE
   bool _isBackgroundModeActive = false;
+  // NOVO: Estado para saber se o serviço está rodando
+  bool _isBackgroundServiceRunning = false; 
+
 
   // INPUT STATE
   final Map<ButtonType, bool> _buttonStates = {};
@@ -78,30 +81,27 @@ class _GamepadScreenState extends State<GamepadScreen> {
   void dispose() {
     _sensorService.stopAllSensors();
     _unlockOrientation();
-    // Garante que o wakelock seja desativado ao sair da tela
     WakelockPlus.disable();
+    // Garante que o serviço pare se o usuário sair da tela sem desativá-lo
+    if (_isBackgroundServiceRunning) {
+      _gamepadInputService.stopGamepadService();
+    }
     super.dispose();
   }
 
   Future<void> _initializeGamepad() async {
     try {
-      // 1. Permissões
       if (!(await _requestPermissions())) {
-        print("Permissões necessárias não foram concedidas.");
         if (mounted) Navigator.pop(context);
         return;
       }
       await _checkAndRequestBatteryOptimization();
-
-      // 2. Inicialização de Serviços
       await _gamepadInputService.initialize();
 
-      // 3. Configurações iniciais
       _lockToLandscape();
       _initializeAllButtonStates();
       await _loadSettings();
       
-      // 4. Listeners e estados iniciais
       _connectionService.connectionStateStream.listen((state) {
         if (mounted) setState(() => _connectionState = state);
       });
@@ -114,6 +114,15 @@ class _GamepadScreenState extends State<GamepadScreen> {
 
       _gamepadInputService.inputStream.listen(_onExternalGamepadInput);
       
+      // NOVO: Ouve o status do serviço para atualizar a UI
+      _gamepadInputService.serviceStatusStream.listen((status) {
+        if (mounted) {
+          setState(() {
+            _isBackgroundServiceRunning = (status == "STARTED");
+          });
+        }
+      });
+
       _sensorService.gyroscopeStream.listen((gyroData) {
         final bool isExternalMode = _externalGamepadState.isConnected && _externalGamepadState.isExternalGamepad;
         if (_gyroscopeEnabled && !isExternalMode) {
@@ -126,10 +135,8 @@ class _GamepadScreenState extends State<GamepadScreen> {
         }
       });
 
-      // 5. Sensores
       await _startEnabledSensors();
 
-      // 6. Layout
       final layoutType = await _storageService.getSelectedLayout();
       if (layoutType == GamepadLayoutType.custom) {
         final customLayouts = await _storageService.getCustomLayouts();
@@ -148,7 +155,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
     } catch (e) {
       print('Error initializing gamepad: $e');
     } finally {
-      // 7. Finaliza o carregamento
       if (mounted) {
         setState(() {
           _isLoading = false; 
@@ -156,6 +162,41 @@ class _GamepadScreenState extends State<GamepadScreen> {
       }
     }
   }
+  
+  // --- LÓGICA DO MODO DE SEGUNDO PLANO ---
+
+  Future<void> _toggleBackgroundMode(bool enable) async {
+    if (enable) {
+      // Pedir permissão para sobrepor outros apps
+      if (await Permission.systemAlertWindow.request().isGranted) {
+        // Iniciar o serviço em primeiro plano
+        await _gamepadInputService.startGamepadService(hapticsEnabled: _hapticFeedbackEnabled);
+        setState(() => _isBackgroundServiceRunning = true);
+        
+
+        // Mostrar uma mensagem para o usuário
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Modo de segundo plano ativado. Você pode minimizar o app.'))
+          );
+        }
+      } else {
+        // Permissão negada
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Permissão de sobreposição é necessária para o modo de segundo plano.'))
+          );
+        }
+        // Desmarca o switch se a permissão for negada
+        setState(() => _isBackgroundServiceRunning = false);
+      }
+    } else {
+      // Parar o serviço em primeiro plano
+      await _gamepadInputService.stopGamepadService();
+      setState(() => _isBackgroundServiceRunning = false);
+    }
+  }
+
 
   Future<void> _checkAndRequestBatteryOptimization() async {
     bool? isBatteryOptimizationDisabled = await DisableBatteryOptimization.isBatteryOptimizationDisabled;
@@ -172,12 +213,7 @@ class _GamepadScreenState extends State<GamepadScreen> {
       Permission.location,
     ].request();
 
-    if (statuses[Permission.notification]!.isGranted &&
-        statuses[Permission.bluetoothScan]!.isGranted &&
-        statuses[Permission.bluetoothConnect]!.isGranted) {
-      return true;
-    }
-    return false;
+    return statuses.values.every((status) => status.isGranted);
   }
   
   Future<void> _loadSettings() async {
@@ -269,10 +305,11 @@ class _GamepadScreenState extends State<GamepadScreen> {
         final buttonType = _externalGamepadMapping[key];
         if (buttonType != null) {
           final bool wasPressed = _buttonStates[buttonType] ?? false;
-          if (isPressed && !wasPressed && _hapticFeedbackEnabled) {
-            _vibrationService.vibrateForButton();
-          }
-          _buttonStates[buttonType] = isPressed;
+          // Só vibra pelo Dart se o serviço de fundo NÃO estiver ativo.
+        if (isPressed && !wasPressed && _hapticFeedbackEnabled && !_isBackgroundServiceRunning) {
+          _vibrationService.vibrateForButton();
+        }
+        _buttonStates[buttonType] = isPressed;
         }
       });
     });
@@ -316,60 +353,70 @@ class _GamepadScreenState extends State<GamepadScreen> {
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
                   style: IconButton.styleFrom(backgroundColor: Colors.grey.shade800),
                 ),
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      _isBackgroundModeActive = !_isBackgroundModeActive;
-                      // Ativa o Wakelock para manter a tela acesa (mas escura pelo overlay)
-                      WakelockPlus.toggle(enable: _isBackgroundModeActive);
-                    });
-                  },
-                  icon: Icon(
-                    _isBackgroundModeActive ? Icons.light_mode : Icons.dark_mode,
-                    color: Colors.white,
-                  ),
-                  tooltip: _isBackgroundModeActive 
-                      ? 'Sair do modo de economia de tela' 
-                      : 'Entrar no modo de economia de tela',
-                  style: IconButton.styleFrom(backgroundColor: Colors.grey.shade800),
-                ),
+                // Botão de modo de economia de tela (opcional)
               ],
             ),
             const SizedBox(height: 10),
-            ConnectionStatusWidget(
-              connectionState: _connectionState,
-              showDetails: true,
-            ),
+            ConnectionStatusWidget(connectionState: _connectionState),
             const SizedBox(height: 10),
-            ConnectionStatusWidget(
-              connectionState: _externalGamepadState,
-              showDetails: true,
-            ),
+            ConnectionStatusWidget(connectionState: _externalGamepadState),
             const SizedBox(height: 30),
             const Icon(Icons.sports_esports, size: 80, color: Colors.green),
             const SizedBox(height: 20),
             Text('Layout Ativo: ${ _isCustomLayout ? "Customizado" : _predefinedLayout.name }', style: TextStyle(fontSize: 18, color: Colors.grey.shade300, fontWeight: FontWeight.bold)),
             const SizedBox(height: 30),
-            _buildSettingsCard(),
+            
+            // NOVO: Card de configurações com o modo de segundo plano
+            _buildBackgroundModeCard(),
+
             const SizedBox(height: 30),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration( color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3)), ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.smartphone, size: 32, color: Colors.green),
-                  SizedBox(width: 16),
-                  Text( 'Ative o modo de economia para\nfuncionar com a "tela desligada".', style: TextStyle(color: Colors.green, fontSize: 14), textAlign: TextAlign.center, ),
-                ],
-              ),
-            ),
+            _buildSettingsCard(),
           ],
         ),
       ),
     );
   }
+
+  // NOVO WIDGET: Card para ativar o modo de segundo plano
+  Widget _buildBackgroundModeCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade900,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          const Text('Modo de Fundo', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(
+            'Permite que o gamepad funcione mesmo com o app minimizado.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            title: const Text('Ativar em Segundo Plano', style: TextStyle(color: Colors.white)),
+            value: _isBackgroundServiceRunning,
+            onChanged: _toggleBackgroundMode,
+            secondary: const Icon(Icons.layers, color: Colors.white),
+            activeThumbColor: Colors.green,
+          ),
+          if (_isBackgroundServiceRunning)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                'Serviço ativo! Você pode sair do app. Para parar, desative aqui ou use a notificação.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.green.shade300, fontSize: 12),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildSettingsCard() {
     return Container(
@@ -419,15 +466,16 @@ class _GamepadScreenState extends State<GamepadScreen> {
         Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: Colors.green,
+          activeThumbColor: Colors.green,
         ),
       ],
     );
   }
 
-  // Em lib/screens/gamepad_screen.dart
+  // O resto dos seus métodos de build (_buildCustomGamepadView, _buildPredefinedGamepadView, etc.)
+  // permanecem exatamente os mesmos. Apenas os colei abaixo por completude.
 
-Widget _buildCustomGamepadView() {
+  Widget _buildCustomGamepadView() {
     if (_customLayout == null) {
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Text('Layout customizado não encontrado.\nVoltando para o padrão.'), ElevatedButton(onPressed: () { _storageService.setSelectedLayout(GamepadLayoutType.xbox); _initializeGamepad(); }, child: const Text("Carregar Layout Padrão"))],));
     }
@@ -472,9 +520,7 @@ Widget _buildCustomGamepadView() {
     );
   }
 
-  // Em lib/screens/gamepad_screen.dart
-
-Widget _buildPredefinedGamepadView() {
+  Widget _buildPredefinedGamepadView() {
     return Stack(
       children: [
         Positioned( top: 10, left: 10, child: IconButton( onPressed: () { _unlockOrientation(); Navigator.pop(context); }, icon: const Icon(Icons.arrow_back), style: IconButton.styleFrom(backgroundColor: Colors.white.withAlpha(230)), ), ),
@@ -485,7 +531,6 @@ Widget _buildPredefinedGamepadView() {
         Positioned(left: 60, top: 95, child: _buildShoulderButton('L1', ButtonType.leftBumper)),
         Positioned(left: 130, bottom: 20, child: _buildStickButton('L3', ButtonType.leftStickButton)),
         Positioned(right: 40, bottom: 40, child: AnalogStick(size: 120, label: 'R', isLeft: false, onChanged: (x, y) {
-          // Bloqueia o controle de toque do analógico direito se o giroscópio estiver ativo
           if (!_gyroscopeEnabled) {
             setState(() { _rightStickX = x; _rightStickY = y; }); 
             _sendGamepadData();
@@ -500,8 +545,6 @@ Widget _buildPredefinedGamepadView() {
     );
   }
   
-  // MÉTODOS AUXILIARES PARA CONSTRUIR OS BOTÕES
-
   Widget _buildDynamicButton(CustomLayoutButton button) {
     final isShoulder = _isShoulderButton(button.type);
     final isDpad = _isDpad(button.type);
@@ -696,8 +739,16 @@ Widget _buildPredefinedGamepadView() {
   
   Future<void> _toggleHapticFeedback(bool enabled) async { setState(() => _hapticFeedbackEnabled = enabled); await _storageService.setHapticFeedbackEnabled(enabled); }
   Future<void> _toggleRumble(bool enabled) async { setState(() => _rumbleEnabled = enabled); await _storageService.setRumbleEnabled(enabled); }
-  Future<void> _toggleGyroscope(bool enabled) async { setState(() => _gyroscopeEnabled = enabled); await _storageService.setGyroscopeEnabled(enabled); if(enabled) _sensorService.startGyroscope(); else _sensorService.stopGyroscope(); }
-  Future<void> _toggleAccelerometer(bool enabled) async { setState(() => _accelerometerEnabled = enabled); await _storageService.setAccelerometerEnabled(enabled); if(enabled) _sensorService.startAccelerometer(); else _sensorService.stopAccelerometer(); }
+  Future<void> _toggleGyroscope(bool enabled) async { setState(() => _gyroscopeEnabled = enabled); await _storageService.setGyroscopeEnabled(enabled); if(enabled) {
+    _sensorService.startGyroscope();
+  } else {
+    _sensorService.stopGyroscope();
+  } }
+  Future<void> _toggleAccelerometer(bool enabled) async { setState(() => _accelerometerEnabled = enabled); await _storageService.setAccelerometerEnabled(enabled); if(enabled) {
+    _sensorService.startAccelerometer();
+  } else {
+    _sensorService.stopAccelerometer();
+  } }
 
   void _sendGamepadData() async {
     try {

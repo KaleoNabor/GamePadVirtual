@@ -36,37 +36,27 @@ class GamepadInputService {
         _currentState =
             ConnectionState.externalGamepadConnected(deviceName: deviceName);
         _connectionController.add(_currentState);
-        
-        // Inicia o serviço de gamepad se já tiver gamepad conectado
-        await _channel.invokeMethod('startGamepadService');
       }
-      
       _isInitialized = true;
-      print('Gamepad Input Service inicializado com serviço dedicado');
-
     } catch (e) {
-      print('Erro ao inicializar Gamepad Input Service: $e');
+      print('Erro ao inicializar detecção de gamepad: $e');
     }
   }
 
-  Future<dynamic> _handleMethodCall(MethodCall call) async {
+  Future<void> _handleMethodCall(MethodCall call) async {
     switch (call.method) {
       case 'onGamepadConnected':
         final deviceName = call.arguments['deviceName'] ?? 'Gamepad Externo';
-        _currentState =
+        final newState =
             ConnectionState.externalGamepadConnected(deviceName: deviceName);
-        _connectionController.add(_currentState);
-        
-        // Inicia o serviço de gamepad quando gamepad conecta
-        await _channel.invokeMethod('startGamepadService');
+        _currentState = newState;
+        _connectionController.add(newState);
         break;
 
       case 'onGamepadDisconnected':
-        _currentState = ConnectionState.disconnected();
-        _connectionController.add(_currentState);
-        
-        // Para o serviço quando gamepad desconecta
-        await _channel.invokeMethod('stopGamepadService');
+        final newState = ConnectionState.disconnected();
+        _currentState = newState;
+        _connectionController.add(newState);
         break;
 
       case 'onGamepadInput':
@@ -83,18 +73,23 @@ class GamepadInputService {
   }
 
   // Método para iniciar manualmente o serviço de gamepad
-  Future<void> startGamepadService() async {
+  Future<void> startGamepadService({required bool hapticsEnabled}) async {
     try {
-      await _channel.invokeMethod('startGamepadService');
+      // MODIFICADO: Passamos a configuração como um argumento para o lado nativo.
+      await _channel.invokeMethod('startGamepadService', {'hapticsEnabled': hapticsEnabled});
+      _serviceStatusController.add("STARTED"); 
     } catch (e) {
       print('Erro ao iniciar serviço de gamepad: $e');
     }
   }
 
   // Método para parar manualmente o serviço de gamepad
+  // MODIFICADO: Este método agora é o principal para parar o serviço em Kotlin.
   Future<void> stopGamepadService() async {
     try {
       await _channel.invokeMethod('stopGamepadService');
+      // ADICIONADO: Avisa o Dart que o serviço foi parado.
+      _serviceStatusController.add("STOPPED");
     } catch (e) {
       print('Erro ao parar serviço de gamepad: $e');
     }
@@ -119,7 +114,5 @@ class GamepadInputService {
     _inputController.close();
     _connectionController.close();
     _serviceStatusController.close();
-    // Para o serviço ao dispor
-    stopGamepadService();
   }
 }

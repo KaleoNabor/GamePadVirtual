@@ -37,6 +37,17 @@ class ConnectionService {
     _initialize();
   }
 
+  Future<List<BluetoothDevice>> getPairedDevices() async {
+    try {
+      final List<BluetoothDevice> devices =
+          await FlutterBluetoothSerial.instance.getBondedDevices();
+      return devices;
+    } catch (e) {
+      print('Erro ao obter dispositivos pareados: $e');
+      return [];
+    }
+  }
+
   final StreamController<ConnectionState> _connectionStateController =
       StreamController<ConnectionState>.broadcast();
   final GamepadInputService _gamepadInputService = GamepadInputService();

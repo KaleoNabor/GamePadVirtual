@@ -37,7 +37,10 @@ class MainActivity: FlutterActivity() {
                     }
                 }
                 "startGamepadService" -> {
-                    startGamepadService()
+                    // MODIFICADO: Extraímos o argumento enviado pelo Dart.
+                    val hapticsEnabled = call.argument<Boolean>("hapticsEnabled") ?: true
+                    // MODIFICADO: Passamos o argumento para a função que inicia o serviço.
+                    startGamepadService(hapticsEnabled)
                     result.success(null)
                 }
                 "stopGamepadService" -> {
@@ -49,9 +52,12 @@ class MainActivity: FlutterActivity() {
         }
     }
 
-    private fun startGamepadService() {
-        val serviceIntent = Intent(this, GamepadInputForegroundService::class.java)
-        serviceIntent.action = GamepadInputForegroundService.ACTION_START_SERVICE
+    private fun startGamepadService(hapticsEnabled: Boolean) {
+        val serviceIntent = Intent(this, GamepadInputForegroundService::class.java).apply {
+            action = GamepadInputForegroundService.ACTION_START_SERVICE
+            // ADICIONADO: Colocamos a configuração como um "extra" na Intent.
+            putExtra("HAPTICS_ENABLED", hapticsEnabled)
+        }
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -76,7 +82,7 @@ class MainActivity: FlutterActivity() {
                 if (device != null && isGamepad(device)) {
                     currentGamepadDevice = device
                     sendGamepadConnected(device)
-                    startGamepadService()
+                    // Não inicia o serviço aqui, deixa o Flutter controlar
                 }
             }
             
@@ -84,7 +90,7 @@ class MainActivity: FlutterActivity() {
                 if (currentGamepadDevice?.id == deviceId) {
                     currentGamepadDevice = null
                     sendGamepadDisconnected()
-                    stopGamepadService()
+                    stopGamepadService() // Para o serviço se o controle for desconectado
                 }
             }
             
@@ -106,7 +112,6 @@ class MainActivity: FlutterActivity() {
             if (device != null && isGamepad(device)) {
                 currentGamepadDevice = device
                 sendGamepadConnected(device)
-                startGamepadService()
                 break
             }
         }
@@ -133,10 +138,14 @@ class MainActivity: FlutterActivity() {
         }
     }
     
+    // --- MÉTODOS DE INPUT MODIFICADOS ---
+
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        // Se o serviço em segundo plano estiver rodando, a Activity não deve processar o evento.
+        if (GamepadInputForegroundService.isServiceRunning) {
+            return super.onGenericMotionEvent(event)
+        }
         if (isGamepadEvent(event)) {
-            // A Activity agora só processa o evento e envia para o Flutter.
-            // A chamada para o serviço foi removida.
             handleGamepadMotion(event)
             return true
         }
@@ -144,8 +153,11 @@ class MainActivity: FlutterActivity() {
     }
     
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Se o serviço em segundo plano estiver rodando, a Activity não deve processar o evento.
+        if (GamepadInputForegroundService.isServiceRunning) {
+            return super.onKeyDown(keyCode, event)
+        }
         if (isGamepadEvent(event) && isGamepadKey(keyCode)) {
-            // A chamada para o serviço foi removida.
             handleGamepadButton(keyCode, true)
             return true
         }
@@ -153,14 +165,19 @@ class MainActivity: FlutterActivity() {
     }
     
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        // Se o serviço em segundo plano estiver rodando, a Activity não deve processar o evento.
+        if (GamepadInputForegroundService.isServiceRunning) {
+            return super.onKeyUp(keyCode, event)
+        }
         if (isGamepadEvent(event) && isGamepadKey(keyCode)) {
-            // A chamada para o serviço foi removida.
             handleGamepadButton(keyCode, false)
             return true
         }
         return super.onKeyUp(keyCode, event)
     }
     
+    // --- LÓGICA DE PROCESSAMENTO (permanece na Activity para quando o app está em primeiro plano) ---
+
     private fun isGamepadEvent(event: MotionEvent): Boolean {
         return (event.source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
                (event.source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
