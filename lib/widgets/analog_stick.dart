@@ -23,45 +23,57 @@ class _AnalogStickState extends State<AnalogStick> {
   double _x = 0;
   double _y = 0;
   bool _isDragging = false;
+  
+  // Otimização: evitar chamadas desnecessárias
+  DateTime _lastUpdate = DateTime.now();
+  static const Duration _minUpdateInterval = Duration(milliseconds: 8); // ~120 FPS
+
+  void _updateStick(double newX, double newY, bool isDragging) {
+    final now = DateTime.now();
+    
+    // Limita a taxa de atualização para melhor performance
+    if (now.difference(_lastUpdate) < _minUpdateInterval && isDragging) {
+      return;
+    }
+
+    if (_x != newX || _y != newY || _isDragging != isDragging) {
+      setState(() {
+        _x = newX;
+        _y = newY;
+        _isDragging = isDragging;
+      });
+      
+      widget.onChanged(_x, _y);
+      _lastUpdate = now;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
           width: widget.size,
           height: widget.size,
           child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onPanStart: (details) {
-              setState(() {
-                _isDragging = true;
-              });
+              _updateStick(0, 0, true);
+              _handlePanUpdate(details.localPosition);
             },
             onPanUpdate: (details) {
-              final center = Offset(widget.size / 2, widget.size / 2);
-              final delta = details.localPosition - center;
-              final distance = math.min(delta.distance, widget.size / 2 - 15);
-              final angle = math.atan2(delta.dy, delta.dx);
-              
-              final newX = distance * math.cos(angle);
-              final newY = distance * math.sin(angle);
-              
-              setState(() {
-                _x = newX / (widget.size / 2 - 15);
-                _y = newY / (widget.size / 2 - 15);
-              });
-              
-              widget.onChanged(_x, _y);
+              _handlePanUpdate(details.localPosition);
             },
             onPanEnd: (details) {
-              setState(() {
-                _x = 0;
-                _y = 0;
-                _isDragging = false;
-              });
-              widget.onChanged(0, 0);
+              _updateStick(0, 0, false);
+            },
+            onPanCancel: () {
+              _updateStick(0, 0, false);
             },
             child: CustomPaint(
+              willChange: true, // Otimização para animações
+              isComplex: true,  // Otimização para pintura
               painter: AnalogStickPainter(
                 x: _x,
                 y: _y,
@@ -82,6 +94,28 @@ class _AnalogStickState extends State<AnalogStick> {
         ),
       ],
     );
+  }
+
+  void _handlePanUpdate(Offset localPosition) {
+    final center = Offset(widget.size / 2, widget.size / 2);
+    final delta = localPosition - center;
+    final distance = math.min(delta.distance, widget.size / 2 - 15);
+    
+    // Evita cálculos desnecessários quando o stick está no centro
+    if (distance < 0.1) {
+      _updateStick(0, 0, true);
+      return;
+    }
+    
+    final angle = math.atan2(delta.dy, delta.dx);
+    
+    final newX = distance * math.cos(angle);
+    final newY = distance * math.sin(angle);
+    
+    final normalizedX = newX / (widget.size / 2 - 15);
+    final normalizedY = newY / (widget.size / 2 - 15);
+    
+    _updateStick(normalizedX, normalizedY, true);
   }
 }
 
@@ -123,11 +157,13 @@ class AnalogStickPainter extends CustomPainter {
       center.dy + (y * maxDistance),
     );
 
-    // Draw stick shadow
-    final shadowOffset = Offset(stickOffset.dx + 2, stickOffset.dy + 2);
-    paint.color = Colors.black.withValues(alpha: 0.3);
-    paint.style = PaintingStyle.fill;
-    canvas.drawCircle(shadowOffset, innerRadius, paint);
+    // Draw stick shadow (apenas se estiver sendo arrastado para performance)
+    if (isDragging) {
+      final shadowOffset = Offset(stickOffset.dx + 2, stickOffset.dy + 2);
+      paint.color = Colors.black.withOpacity(0.3);
+      paint.style = PaintingStyle.fill;
+      canvas.drawCircle(shadowOffset, innerRadius, paint);
+    }
 
     // Draw stick
     paint.color = isDragging ? Colors.blue.shade400 : Colors.grey.shade300;
@@ -140,10 +176,12 @@ class AnalogStickPainter extends CustomPainter {
     paint.strokeWidth = 2;
     canvas.drawCircle(stickOffset, innerRadius - 1, paint);
 
-    // Draw center dot
-    paint.color = Colors.grey.shade700;
-    paint.style = PaintingStyle.fill;
-    canvas.drawCircle(stickOffset, 3, paint);
+    // Draw center dot (apenas se estiver sendo arrastado para performance)
+    if (isDragging) {
+      paint.color = Colors.grey.shade700;
+      paint.style = PaintingStyle.fill;
+      canvas.drawCircle(stickOffset, 3, paint);
+    }
   }
 
   @override

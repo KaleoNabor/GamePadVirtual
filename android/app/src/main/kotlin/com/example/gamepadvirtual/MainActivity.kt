@@ -1,8 +1,10 @@
 package com.example.gamepadvirtual
 
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.hardware.input.InputManager
 import android.os.Build
 import android.view.InputDevice
@@ -13,14 +15,33 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "gamepad_input_channel"
+    // --- Canais de Comunicação com o Flutter ---
+    private val GAMEPAD_CHANNEL = "gamepad_input_channel"
+    private val DISCOVERY_CHANNEL = "com.example.gamepadvirtual/discovery"
+
+    private var gamepadInputChannel: MethodChannel? = null
+    private var discoveryChannel: MethodChannel? = null
+
+    // --- Variáveis para Detecção de Gamepad Externo ---
     private var inputManager: InputManager? = null
     private var currentGamepadDevice: InputDevice? = null
 
+    // --- Receptor para o Serviço de Descoberta ---
+    private val serverFoundReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val serverName = intent.getStringExtra(DiscoveryService.EXTRA_SERVER_NAME)
+            val serverIp = intent.getStringExtra(DiscoveryService.EXTRA_SERVER_IP)
+            // Envia o servidor encontrado de volta para o Flutter através do canal de descoberta
+            discoveryChannel?.invokeMethod("serverFound", mapOf("name" to serverName, "ip" to serverIp))
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+
+        // --- Configuração do Canal de Gamepad Externo ---
+        gamepadInputChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GAMEPAD_CHANNEL)
+        gamepadInputChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "initializeGamepadDetection" -> {
                     initializeGamepadDetection()
@@ -29,7 +50,7 @@ class MainActivity: FlutterActivity() {
                 "getInitialGamepadState" -> {
                     if (currentGamepadDevice != null) {
                         result.success(mapOf(
-                            "deviceName" to currentGamepadDevice!!.name, 
+                            "deviceName" to currentGamepadDevice!!.name,
                             "deviceId" to currentGamepadDevice!!.id
                         ))
                     } else {
@@ -37,9 +58,7 @@ class MainActivity: FlutterActivity() {
                     }
                 }
                 "startGamepadService" -> {
-                    // MODIFICADO: Extraímos o argumento enviado pelo Dart.
                     val hapticsEnabled = call.argument<Boolean>("hapticsEnabled") ?: true
-                    // MODIFICADO: Passamos o argumento para a função que inicia o serviço.
                     startGamepadService(hapticsEnabled)
                     result.success(null)
                 }
@@ -50,15 +69,69 @@ class MainActivity: FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // --- Configuração do Canal de Descoberta de Rede ---
+        discoveryChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DISCOVERY_CHANNEL)
+        discoveryChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startDiscovery" -> {
+                    startDiscoveryService()
+                    result.success(null)
+                }
+                "stopDiscovery" -> {
+                    stopDiscoveryService()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
+    // --- Ciclo de Vida da Activity para o Receptor de Descoberta ---
+    override fun onResume() {
+        super.onResume()
+        // Verifica gamepads conectados ao resumir a activity
+        checkConnectedGamepads()
+        // Registra o receptor para ouvir por servidores encontrados pelo DiscoveryService
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(serverFoundReceiver, IntentFilter(DiscoveryService.SERVER_FOUND_ACTION), RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(serverFoundReceiver, IntentFilter(DiscoveryService.SERVER_FOUND_ACTION))
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Desregistra o receptor para evitar vazamentos de memória
+        unregisterReceiver(serverFoundReceiver)
+    }
+
+    // --- Funções para controlar o Serviço de Descoberta ---
+    private fun startDiscoveryService() {
+        val intent = Intent(this, DiscoveryService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun stopDiscoveryService() {
+        val intent = Intent(this, DiscoveryService::class.java)
+        stopService(intent)
+    }
+
+
+    // =========================================================================
+    //  TODA A LÓGICA DE DETECÇÃO DE GAMEPAD EXTERNO PERMANECE AQUI (SEM ALTERAÇÕES)
+    // =========================================================================
+    
     private fun startGamepadService(hapticsEnabled: Boolean) {
         val serviceIntent = Intent(this, GamepadInputForegroundService::class.java).apply {
             action = GamepadInputForegroundService.ACTION_START_SERVICE
-            // ADICIONADO: Colocamos a configuração como um "extra" na Intent.
             putExtra("HAPTICS_ENABLED", hapticsEnabled)
         }
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {
@@ -75,25 +148,22 @@ class MainActivity: FlutterActivity() {
     @SuppressLint("NewApi")
     private fun initializeGamepadDetection() {
         inputManager = getSystemService(Context.INPUT_SERVICE) as InputManager
-        
+
         inputManager?.registerInputDeviceListener(object : InputManager.InputDeviceListener {
             override fun onInputDeviceAdded(deviceId: Int) {
                 val device = InputDevice.getDevice(deviceId)
                 if (device != null && isGamepad(device)) {
                     currentGamepadDevice = device
                     sendGamepadConnected(device)
-                    // Não inicia o serviço aqui, deixa o Flutter controlar
                 }
             }
-            
             override fun onInputDeviceRemoved(deviceId: Int) {
                 if (currentGamepadDevice?.id == deviceId) {
                     currentGamepadDevice = null
                     sendGamepadDisconnected()
-                    stopGamepadService() // Para o serviço se o controle for desconectado
+                    stopGamepadService()
                 }
             }
-            
             override fun onInputDeviceChanged(deviceId: Int) {
                 val device = InputDevice.getDevice(deviceId)
                 if (device != null && isGamepad(device)) {
@@ -101,10 +171,10 @@ class MainActivity: FlutterActivity() {
                 }
             }
         }, null)
-        
+
         checkConnectedGamepads()
     }
-    
+
     private fun checkConnectedGamepads() {
         val deviceIds = InputDevice.getDeviceIds()
         for (deviceId in deviceIds) {
@@ -116,7 +186,7 @@ class MainActivity: FlutterActivity() {
             }
         }
     }
-    
+
     private fun isGamepad(device: InputDevice): Boolean {
         val sources = device.sources
         return (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
@@ -125,23 +195,20 @@ class MainActivity: FlutterActivity() {
 
     private fun sendGamepadConnected(device: InputDevice) {
         flutterEngine?.dartExecutor?.binaryMessenger?.let {
-            MethodChannel(it, CHANNEL).invokeMethod(
-                "onGamepadConnected", 
+            MethodChannel(it, GAMEPAD_CHANNEL).invokeMethod(
+                "onGamepadConnected",
                 mapOf("deviceName" to device.name, "deviceId" to device.id)
             )
         }
     }
-    
+
     private fun sendGamepadDisconnected() {
         flutterEngine?.dartExecutor?.binaryMessenger?.let {
-            MethodChannel(it, CHANNEL).invokeMethod("onGamepadDisconnected", null)
+            MethodChannel(it, GAMEPAD_CHANNEL).invokeMethod("onGamepadDisconnected", null)
         }
     }
-    
-    // --- MÉTODOS DE INPUT MODIFICADOS ---
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-        // Se o serviço em segundo plano estiver rodando, a Activity não deve processar o evento.
         if (GamepadInputForegroundService.isServiceRunning) {
             return super.onGenericMotionEvent(event)
         }
@@ -151,9 +218,8 @@ class MainActivity: FlutterActivity() {
         }
         return super.onGenericMotionEvent(event)
     }
-    
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        // Se o serviço em segundo plano estiver rodando, a Activity não deve processar o evento.
         if (GamepadInputForegroundService.isServiceRunning) {
             return super.onKeyDown(keyCode, event)
         }
@@ -163,9 +229,8 @@ class MainActivity: FlutterActivity() {
         }
         return super.onKeyDown(keyCode, event)
     }
-    
+
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        // Se o serviço em segundo plano estiver rodando, a Activity não deve processar o evento.
         if (GamepadInputForegroundService.isServiceRunning) {
             return super.onKeyUp(keyCode, event)
         }
@@ -175,14 +240,12 @@ class MainActivity: FlutterActivity() {
         }
         return super.onKeyUp(keyCode, event)
     }
-    
-    // --- LÓGICA DE PROCESSAMENTO (permanece na Activity para quando o app está em primeiro plano) ---
 
     private fun isGamepadEvent(event: MotionEvent): Boolean {
         return (event.source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
                (event.source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
     }
-    
+
     private fun isGamepadEvent(event: KeyEvent): Boolean {
         return (event.source and InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD ||
                (event.source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
@@ -196,7 +259,7 @@ class MainActivity: FlutterActivity() {
             else -> false
         }
     }
-    
+
     private fun handleGamepadMotion(event: MotionEvent) {
         val analogData = mutableMapOf<String, Double>()
         analogData["leftX"] = getCenteredAxisValue(event, MotionEvent.AXIS_X)
@@ -207,20 +270,20 @@ class MainActivity: FlutterActivity() {
         analogData["rightTrigger"] = event.getAxisValue(MotionEvent.AXIS_RTRIGGER).toDouble()
         analogData["dpadX"] = getCenteredAxisValue(event, MotionEvent.AXIS_HAT_X)
         analogData["dpadY"] = getCenteredAxisValue(event, MotionEvent.AXIS_HAT_Y)
-        
+
         flutterEngine?.dartExecutor?.binaryMessenger?.let {
-            MethodChannel(it, CHANNEL).invokeMethod(
+            MethodChannel(it, GAMEPAD_CHANNEL).invokeMethod(
                 "onGamepadInput",
                 mapOf("analog" to analogData)
             )
         }
     }
-    
+
     private fun getCenteredAxisValue(event: MotionEvent, axis: Int): Double {
         val value = event.getAxisValue(axis)
         return if (kotlin.math.abs(value) > 0.1f) value.toDouble() else 0.0
     }
-    
+
     private fun handleGamepadButton(keyCode: Int, isPressed: Boolean) {
         val buttonName = when (keyCode) {
             KeyEvent.KEYCODE_BUTTON_A -> "BUTTON_A"
@@ -241,19 +304,14 @@ class MainActivity: FlutterActivity() {
             KeyEvent.KEYCODE_DPAD_RIGHT -> "DPAD_RIGHT"
             else -> null
         }
-        
+
         if (buttonName != null) {
             flutterEngine?.dartExecutor?.binaryMessenger?.let {
-                MethodChannel(it, CHANNEL).invokeMethod(
+                MethodChannel(it, GAMEPAD_CHANNEL).invokeMethod(
                     "onGamepadInput",
                     mapOf("buttons" to mapOf(buttonName to isPressed))
                 )
             }
         }
-    }
-    
-    override fun onResume() {
-        super.onResume()
-        checkConnectedGamepads()
     }
 }

@@ -72,10 +72,8 @@ class GamepadInputService {
     }
   }
 
-  // Método para iniciar manualmente o serviço de gamepad
   Future<void> startGamepadService({required bool hapticsEnabled}) async {
     try {
-      // MODIFICADO: Passamos a configuração como um argumento para o lado nativo.
       await _channel.invokeMethod('startGamepadService', {'hapticsEnabled': hapticsEnabled});
       _serviceStatusController.add("STARTED"); 
     } catch (e) {
@@ -83,25 +81,25 @@ class GamepadInputService {
     }
   }
 
-  // Método para parar manualmente o serviço de gamepad
-  // MODIFICADO: Este método agora é o principal para parar o serviço em Kotlin.
   Future<void> stopGamepadService() async {
     try {
       await _channel.invokeMethod('stopGamepadService');
-      // ADICIONADO: Avisa o Dart que o serviço foi parado.
       _serviceStatusController.add("STOPPED");
     } catch (e) {
       print('Erro ao parar serviço de gamepad: $e');
     }
   }
 
-  Future<void> sendGamepadData(Map<String, dynamic> data) async {
+  // Esta função envia dados PARA um gamepad externo (ex: rumble), não para o PC.
+  // A deixamos aqui para usos futuros.
+  Future<void> sendRumbleData(Map<String, dynamic> data) async {
     if (!_currentState.isExternalGamepad) return;
 
     try {
-      await _channel.invokeMethod('sendGamepadData', data);
+      // O nome do método aqui é um exemplo, teríamos que implementar no lado nativo
+      await _channel.invokeMethod('sendRumbleData', data);
     } catch (e) {
-      print('Erro ao enviar dados do gamepad: $e');
+      print('Erro ao enviar dados de rumble: $e');
     }
   }
 

@@ -3,16 +3,29 @@ import 'package:gamepadvirtual/services/storage_service.dart';
 
 class VibrationService {
   final StorageService _storageService = StorageService();
+  bool _isVibrating = false;
 
   static const int _lightVibration = 50;
 
   // Vibração de feedback ao tocar nos botões virtuais
   Future<void> vibrateForButton() async {
+    if (_isVibrating) return;
+    
     final isEnabled = await _storageService.isHapticFeedbackEnabled();
     if (!isEnabled) return;
 
-    if (await Vibration.hasVibrator() ?? false) {
-      Vibration.vibrate(duration: _lightVibration);
+    _isVibrating = true;
+    
+    try {
+      if (await Vibration.hasVibrator() ?? false) {
+        await Vibration.vibrate(duration: _lightVibration);
+      }
+    } catch (e) {
+      print('Vibration error: $e');
+    } finally {
+      // Delay para evitar vibrações muito rápidas
+      await Future.delayed(const Duration(milliseconds: 50));
+      _isVibrating = false;
     }
   }
 
@@ -21,10 +34,14 @@ class VibrationService {
     final isEnabled = await _storageService.isRumbleEnabled();
     if (!isEnabled) return;
 
-    if (await Vibration.hasCustomVibrationsSupport() ?? false) {
-      Vibration.vibrate(pattern: pattern);
-    } else if (await Vibration.hasVibrator() ?? false) {
-      Vibration.vibrate(duration: 100); // Fallback
+    try {
+      if (await Vibration.hasCustomVibrationsSupport() ?? false) {
+        await Vibration.vibrate(pattern: pattern);
+      } else if (await Vibration.hasVibrator() ?? false) {
+        await Vibration.vibrate(duration: 100);
+      }
+    } catch (e) {
+      print('Rumble vibration error: $e');
     }
   }
 }
