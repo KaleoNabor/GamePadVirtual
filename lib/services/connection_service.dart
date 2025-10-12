@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert'; // Necessário para JSON
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:gamepadvirtual/models/connection_state.dart';
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
+import 'package:gamepadvirtual/services/vibration_service.dart'; // Importe seu serviço de vibração
 
+// Definição da classe GamepadInputData (sem alterações)
 class GamepadInputData {
   final Map<ButtonType, bool> buttons;
   final Map<String, double> analogSticks;
@@ -19,9 +22,7 @@ class GamepadInputData {
     required this.timestamp,
   });
 
-  // DENTRO DE: lib/services/connection_service.dart
-
-Uint8List toPacketBytes() {
+  Uint8List toPacketBytes() {
     final byteData = ByteData(20);
     int buttonFlags = 0;
     if (buttons[ButtonType.dpadUp] == true) buttonFlags |= (1 << 0);
@@ -38,41 +39,30 @@ Uint8List toPacketBytes() {
     if (buttons[ButtonType.b] == true || buttons[ButtonType.circle] == true) buttonFlags |= (1 << 13);
     if (buttons[ButtonType.x] == true || buttons[ButtonType.square] == true) buttonFlags |= (1 << 14);
     if (buttons[ButtonType.y] == true || buttons[ButtonType.triangle] == true) buttonFlags |= (1 << 15);
-
-    // Botões (Offset 0, 2 bytes)
     byteData.setUint16(0, buttonFlags, Endian.little);
-    // Analógicos (Offset 2, 4 bytes)
     byteData.setInt8(2, ((analogSticks['leftX'] ?? 0.0) * 127).round());
     byteData.setInt8(3, ((analogSticks['leftY'] ?? 0.0) * 127).round());
     byteData.setInt8(4, ((analogSticks['rightX'] ?? 0.0) * 127).round());
     byteData.setInt8(5, ((analogSticks['rightY'] ?? 0.0) * 127).round());
-    // Gatilhos (Offset 6, 2 bytes)
     byteData.setUint8(6, ((analogSticks['leftTrigger'] ?? 0.0) * 255).toInt());
     byteData.setUint8(7, ((analogSticks['rightTrigger'] ?? 0.0) * 255).toInt());
-    // Giroscópio (Offset 8, 6 bytes)
     final gyroX = (sensors['gyroX'] ?? 0.0) * 100;
     final gyroY = (sensors['gyroY'] ?? 0.0) * 100;
     final gyroZ = (sensors['gyroZ'] ?? 0.0) * 100;
     byteData.setInt16(8, gyroX.round(), Endian.little);
     byteData.setInt16(10, gyroY.round(), Endian.little);
     byteData.setInt16(12, gyroZ.round(), Endian.little);
-
-    // =========================================================================
-    // CORREÇÃO: ADICIONANDO OS DADOS DO ACELERÔMETRO QUE FALTAVAM
-    // (Offset 14, 6 bytes)
-    // =========================================================================
     final accelX = (sensors['accelX'] ?? 0.0) * 100;
     final accelY = (sensors['accelY'] ?? 0.0) * 100;
     final accelZ = (sensors['accelZ'] ?? 0.0) * 100;
     byteData.setInt16(14, accelX.round(), Endian.little);
     byteData.setInt16(16, accelY.round(), Endian.little);
     byteData.setInt16(18, accelZ.round(), Endian.little);
-    // =========================================================================
-
     return byteData.buffer.asUint8List();
-}
+  }
 }
 
+// Classe DiscoveredServer (sem alterações)
 class DiscoveredServer {
   final String name;
   final InternetAddress ipAddress;
@@ -84,25 +74,28 @@ class ConnectionService {
   factory ConnectionService() => _instance;
   ConnectionService._internal();
 
+  // --- Constantes ---
   static const MethodChannel _discoveryChannel = MethodChannel('com.example.gamepadvirtual/discovery');
-  static const int discoveryPort = 27016;
   static const int dataPort = 27015;
-  static final _discoveryQuery = "DISCOVER_GAMEPAD_VIRTUAL_SERVER".codeUnits;
-  static const String _discoveryAckPrefix = "GAMEPAD_VIRTUAL_SERVER_ACK:";
 
+  // --- Controladores de Stream ---
   final _connectionStateController = StreamController<ConnectionState>.broadcast();
   final _discoveredServersController = StreamController<List<DiscoveredServer>>.broadcast();
 
+  // --- Variáveis de Estado (MODIFICADAS PARA UDP) ---
   ConnectionState _currentState = ConnectionState.disconnected();
+  RawDatagramSocket? _udpSocket; // <<< TROCADO de Socket para RawDatagramSocket
+  InternetAddress? _serverAddress; // <<< Endereço do servidor para enviar pacotes
   BluetoothConnection? _bluetoothConnection;
-  Socket? _dataSocket;
-  RawDatagramSocket? _discoverySocket;
   final List<DiscoveredServer> _foundServers = [];
+  final VibrationService _vibrationService = VibrationService(); // Instância do serviço de vibração
 
+  // --- Streams Públicas ---
   Stream<ConnectionState> get connectionStateStream => _connectionStateController.stream;
   Stream<List<DiscoveredServer>> get discoveredServersStream => _discoveredServersController.stream;
   ConnectionState get currentState => _currentState;
 
+  // --- Lógica de Descoberta (sem alterações) ---
   Future<void> discoverServers() async {
     _foundServers.clear();
     _discoveredServersController.add(_foundServers);
@@ -132,46 +125,95 @@ class ConnectionService {
     _discoveryChannel.setMethodCallHandler(null);
   }
 
+  // --- CONEXÃO UDP (LÓGICA COMPLETAMENTE NOVA) ---
   Future<bool> connectToServer(DiscoveredServer server) async {
     await _disconnectCurrent(updateState: false);
     try {
-      // CORREÇÃO: Usar ConnectionService.dataPort
-      _dataSocket = await Socket.connect(server.ipAddress, ConnectionService.dataPort, timeout: const Duration(seconds: 5));
-      _dataSocket!.setOption(SocketOption.tcpNoDelay, true);
+      // Em UDP, não "conectamos", apenas criamos um socket para enviar e receber
+      _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      _serverAddress = server.ipAddress;
+      
+      // Configura o listener para receber comandos de vibração
+      _listenForVibration(_udpSocket!);
+      
       _updateConnectionState(ConnectionState.wifiDirectConnected(deviceName: '${server.name} (${server.ipAddress.address})'));
-      _dataSocket!.listen((data) {}, onDone: disconnect, onError: (e) => disconnect());
       return true;
     } catch (e) {
-      print("Erro ao conectar ao servidor TCP: $e");
+      print("Erro ao iniciar cliente UDP: $e");
       await _disconnectCurrent();
       return false;
     }
   }
-  
+
+  // --- Lógica de Envio de Dados (MODIFICADA) ---
   void sendGamepadData(GamepadInputData data) {
     if (!_currentState.isConnected) return;
     try {
       final Uint8List packet = data.toPacketBytes();
-      if (_currentState.type == ConnectionType.bluetooth) {
-        _bluetoothConnection?.output.add(packet);
-      } else {
-        _dataSocket?.add(packet);
+      if (_currentState.type == ConnectionType.bluetooth && _bluetoothConnection != null) {
+        _bluetoothConnection!.output.add(packet);
+      } else if (_udpSocket != null && _serverAddress != null) {
+        // Envia o pacote para o endereço do servidor que descobrimos
+        _udpSocket!.send(packet, _serverAddress!, dataPort);
       }
     } catch (e) {
+      // Em UDP, erros de envio são menos comuns, mas podemos desconectar se algo der errado
       print('Erro ao enviar dados do gamepad: $e');
-      disconnect();
     }
   }
 
+  // --- Lógica para Ouvir Comandos de Vibração (NOVA FUNÇÃO REUTILIZÁVEL) ---
+  void _listenForVibration(Stream<RawSocketEvent> stream) {
+    stream.listen((RawSocketEvent event) {
+      if (event == RawSocketEvent.read) {
+        Datagram? datagram = _udpSocket?.receive();
+        if (datagram == null) return;
+        
+        try {
+          final message = utf8.decode(datagram.data);
+          final json = jsonDecode(message);
+          if (json['type'] == 'vibration') {
+            final List<dynamic> patternDyn = json['pattern'];
+            final List<int> pattern = patternDyn.map((e) => e as int).toList();
+            _vibrationService.vibratePattern(pattern);
+          }
+        } catch (e) {
+          // Ignora pacotes que não são JSON (como os pacotes do gamepad, se o servidor os enviasse de volta)
+        }
+      }
+    });
+  }
+  
+  Future<void> sendDisconnectSignal() async {
+    // A mensagem precisa ser exatamente a mesma que o servidor C++ espera.
+    final disconnectMessage = utf8.encode("DISCONNECT_GPV_PLAYER");
+
+    if (_currentState.type == ConnectionType.wifiDirect && _udpSocket != null && _serverAddress != null) {
+      _udpSocket!.send(disconnectMessage, _serverAddress!, dataPort);
+      print("Sinal de desconexão UDP enviado.");
+    }
+    // No futuro, a lógica para Bluetooth seria adicionada aqui
+    else if (_currentState.type == ConnectionType.bluetooth && _bluetoothConnection != null) {
+        _bluetoothConnection!.output.add(disconnectMessage);
+        print("Sinal de desconexão Bluetooth enviado.");
+    }
+  }
+
+  // --- Lógica de Desconexão (MODIFICADA) ---
   Future<void> disconnect() async {
     await _disconnectCurrent();
   }
 
   Future<void> _disconnectCurrent({bool updateState = true}) async {
+    // Bluetooth
     _bluetoothConnection?.close();
     _bluetoothConnection = null;
-    _dataSocket?.destroy();
-    _dataSocket = null;
+    
+    // UDP
+    _udpSocket?.close();
+    _udpSocket = null;
+    _serverAddress = null;
+    
     stopDiscovery();
     if (updateState) {
       _updateConnectionState(ConnectionState.disconnected());
@@ -192,6 +234,7 @@ class ConnectionService {
     _discoveredServersController.close();
   }
   
+  // Lógica do Bluetooth (sem grandes alterações, mas adaptada para o novo fluxo)
   Future<List<BluetoothDevice>> getPairedDevices() async {
     try { return await FlutterBluetoothSerial.instance.getBondedDevices(); } 
     catch (e) { return []; }
@@ -202,7 +245,20 @@ class ConnectionService {
     try {
       _bluetoothConnection = await BluetoothConnection.toAddress(device.address);
       _updateConnectionState(ConnectionState.bluetoothConnected(deviceName: device.name ?? 'Unknown Device', deviceAddress: device.address));
-      _bluetoothConnection!.input!.listen(null, onDone: disconnect);
+      // Listener para vibração via Bluetooth
+      _bluetoothConnection!.input!.listen((data) {
+          try {
+            final message = utf8.decode(data);
+            final json = jsonDecode(message);
+            if (json['type'] == 'vibration') {
+              final List<dynamic> patternDyn = json['pattern'];
+              final List<int> pattern = patternDyn.map((e) => e as int).toList();
+              _vibrationService.vibratePattern(pattern);
+            }
+          } catch (e) {
+             // Ignora pacotes não-JSON
+          }
+      }, onDone: disconnect);
       return true;
     } catch (e) {
       await _disconnectCurrent();

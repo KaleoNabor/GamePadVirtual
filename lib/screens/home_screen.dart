@@ -12,13 +12,13 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final ConnectionService _connectionService = ConnectionService();
   models.ConnectionState _connectionState = models.ConnectionState.disconnected();
-  
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _connectionService.connectionStateStream.listen((state) {
       if (mounted) setState(() => _connectionState = state);
     });
@@ -26,6 +26,17 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _connectionState = _connectionService.currentState;
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // 'detached' é o estado chamado quando o app está sendo finalizado de vez.
+    if (state == AppLifecycleState.detached) {
+      if (_connectionState.isConnected) {
+        _connectionService.sendDisconnectSignal();
+      }
+    }
   }
 
   /// Abre um pop-up para procurar e listar servidores na rede.
@@ -118,26 +129,51 @@ class _HomeScreenState extends State<HomeScreen> {
           ConnectionStatusCard(connectionState: _connectionState),
           const SizedBox(height: 24),
           
-          ElevatedButton.icon(
-            icon: const Icon(Icons.wifi_tethering_rounded),
-            label: const Text('Conectar na Rede'),
-            onPressed: _discoverAndShowServers,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+          // =======================================================================
+          // NOVA LÓGICA: Mostrar o botão de Desconectar ou Conectar
+          // =======================================================================
+          if (_connectionState.isConnected)
+            // Se estiver conectado, mostra o botão de Desconectar
+            ElevatedButton.icon(
+              icon: const Icon(Icons.link_off),
+              label: const Text('Desconectar'),
+              onPressed: () async {
+                await _connectionService.sendDisconnectSignal();
+                await _connectionService.disconnect();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            )
+          else
+            // Se não, mostra o botão de Conectar
+            ElevatedButton.icon(
+              icon: const Icon(Icons.wifi_tethering_rounded),
+              label: const Text('Conectar na Rede'),
+              onPressed: _discoverAndShowServers,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Use para Wi-Fi ou Ancoragem USB (USB Tethering).',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
-          ),
           
+          const SizedBox(height: 8),
+          if (!_connectionState.isConnected)
+            const Text(
+              'Use para Wi-Fi ou Ancoragem USB (USB Tethering).',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+          // =======================================================================
+
           const SizedBox(height: 24),
           const Divider(),
+
           const SizedBox(height: 16),
 
           ListTile(
@@ -198,6 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _connectionService.dispose();
     super.dispose();
   }

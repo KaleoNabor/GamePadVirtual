@@ -126,7 +126,7 @@ class _GamepadScreenState extends State<GamepadScreen> {
 
   void _startGameLoop() {
     _gameLoopTimer?.cancel();
-    _gameLoopTimer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
+    _gameLoopTimer = Timer.periodic(const Duration(milliseconds: 8), (timer) {
       if (_connectionService.currentState.isConnected && (_hasNewInput || _gyroscopeEnabled || _accelerometerEnabled)) {
         _sendGamepadData();
         _hasNewInput = false;
