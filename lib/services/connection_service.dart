@@ -19,8 +19,10 @@ class GamepadInputData {
     required this.timestamp,
   });
 
-  Uint8List toPacketBytes() {
-    final byteData = ByteData(14);
+  // DENTRO DE: lib/services/connection_service.dart
+
+Uint8List toPacketBytes() {
+    final byteData = ByteData(20);
     int buttonFlags = 0;
     if (buttons[ButtonType.dpadUp] == true) buttonFlags |= (1 << 0);
     if (buttons[ButtonType.dpadDown] == true) buttonFlags |= (1 << 1);
@@ -36,21 +38,39 @@ class GamepadInputData {
     if (buttons[ButtonType.b] == true || buttons[ButtonType.circle] == true) buttonFlags |= (1 << 13);
     if (buttons[ButtonType.x] == true || buttons[ButtonType.square] == true) buttonFlags |= (1 << 14);
     if (buttons[ButtonType.y] == true || buttons[ButtonType.triangle] == true) buttonFlags |= (1 << 15);
+
+    // Botões (Offset 0, 2 bytes)
     byteData.setUint16(0, buttonFlags, Endian.little);
+    // Analógicos (Offset 2, 4 bytes)
     byteData.setInt8(2, ((analogSticks['leftX'] ?? 0.0) * 127).round());
     byteData.setInt8(3, ((analogSticks['leftY'] ?? 0.0) * 127).round());
     byteData.setInt8(4, ((analogSticks['rightX'] ?? 0.0) * 127).round());
     byteData.setInt8(5, ((analogSticks['rightY'] ?? 0.0) * 127).round());
+    // Gatilhos (Offset 6, 2 bytes)
     byteData.setUint8(6, ((analogSticks['leftTrigger'] ?? 0.0) * 255).toInt());
     byteData.setUint8(7, ((analogSticks['rightTrigger'] ?? 0.0) * 255).toInt());
+    // Giroscópio (Offset 8, 6 bytes)
     final gyroX = (sensors['gyroX'] ?? 0.0) * 100;
     final gyroY = (sensors['gyroY'] ?? 0.0) * 100;
     final gyroZ = (sensors['gyroZ'] ?? 0.0) * 100;
     byteData.setInt16(8, gyroX.round(), Endian.little);
     byteData.setInt16(10, gyroY.round(), Endian.little);
     byteData.setInt16(12, gyroZ.round(), Endian.little);
+
+    // =========================================================================
+    // CORREÇÃO: ADICIONANDO OS DADOS DO ACELERÔMETRO QUE FALTAVAM
+    // (Offset 14, 6 bytes)
+    // =========================================================================
+    final accelX = (sensors['accelX'] ?? 0.0) * 100;
+    final accelY = (sensors['accelY'] ?? 0.0) * 100;
+    final accelZ = (sensors['accelZ'] ?? 0.0) * 100;
+    byteData.setInt16(14, accelX.round(), Endian.little);
+    byteData.setInt16(16, accelY.round(), Endian.little);
+    byteData.setInt16(18, accelZ.round(), Endian.little);
+    // =========================================================================
+
     return byteData.buffer.asUint8List();
-  }
+}
 }
 
 class DiscoveredServer {
@@ -77,7 +97,7 @@ class ConnectionService {
   BluetoothConnection? _bluetoothConnection;
   Socket? _dataSocket;
   RawDatagramSocket? _discoverySocket;
-  List<DiscoveredServer> _foundServers = [];
+  final List<DiscoveredServer> _foundServers = [];
 
   Stream<ConnectionState> get connectionStateStream => _connectionStateController.stream;
   Stream<List<DiscoveredServer>> get discoveredServersStream => _discoveredServersController.stream;

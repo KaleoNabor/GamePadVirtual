@@ -77,7 +77,9 @@ class SensorService {
   }
 
   // Start gyroscope
-  Future<void> startGyroscope() async {
+  // DENTRO DE: lib/services/sensor_service.dart
+
+Future<void> startGyroscope() async {
     final isEnabled = await _storageService.isGyroscopeEnabled();
     if (!isEnabled) return;
 
@@ -87,20 +89,27 @@ class SensorService {
 
     _gyroscopeSubscription = gyroscopeEventStream().listen(
       (GyroscopeEvent event) {
+        // ... (código de troca de eixos)
         _gyroscopeController.add(SensorData(
-          x: event.x,
-          y: event.y,
+          x: -event.y,
+          y: event.x,
           z: event.z,
           timestamp: DateTime.now(),
         ));
       },
+      // =========================================================================
+      // CORREÇÃO: Modifique esta linha para imprimir o erro real
+      // =========================================================================
       onError: (error) {
-        print('Gyroscope error: \$error');
+        // Antes: print('Gyroscope error: $error');
+        // Agora, imprimimos o objeto de erro detalhado.
+        print('Gyroscope stream failed with error: $error');
       },
+      // =========================================================================
     );
 
     _isGyroscopeActive = true;
-  }
+}
 
   // Stop gyroscope
   Future<void> stopGyroscope() async {
