@@ -32,6 +32,37 @@ class ConnectionState {
     );
   }
 
+  // MODIFICADO: Factory para Bluetooth LE com prefixo
+  factory ConnectionState.bluetoothLeConnected({
+    required String deviceName,
+    required String deviceAddress,
+  }) {
+    return ConnectionState(
+      type: ConnectionType.bluetooth,
+      isConnected: true,
+      deviceName: "BLE: $deviceName", // <<< Adiciona o prefixo
+      deviceAddress: deviceAddress,
+      connectedAt: DateTime.now(),
+      isExternalGamepad: false,
+    );
+  }
+
+  // MODIFICADO: Factory para Bluetooth Clássico com prefixo (renomeado)
+  factory ConnectionState.bluetoothClassicConnected({
+    required String deviceName,
+    required String deviceAddress,
+  }) {
+    return ConnectionState(
+      type: ConnectionType.bluetooth,
+      isConnected: true,
+      deviceName: "Clássico: $deviceName", // <<< Adiciona o prefixo
+      deviceAddress: deviceAddress,
+      connectedAt: DateTime.now(),
+      isExternalGamepad: false,
+    );
+  }
+
+  // MANTIDO: Factory original para compatibilidade (pode ser removido posteriormente)
   factory ConnectionState.bluetoothConnected({
     required String deviceName,
     required String deviceAddress,
@@ -67,7 +98,6 @@ class ConnectionState {
     );
   }
 
-
   factory ConnectionState.externalGamepadConnected({required String deviceName}) {
     return ConnectionState(
       type: ConnectionType.externalGamepad,
@@ -78,12 +108,24 @@ class ConnectionState {
     );
   }
 
+  // ADICIONADO: Getters para identificar o tipo de conexão
+  bool get isWifi => type == ConnectionType.wifiDirect;
+  bool get isBle => type == ConnectionType.bluetooth && deviceName?.startsWith("BLE:") == true;
+  bool get isClassicBt => type == ConnectionType.bluetooth && deviceName?.startsWith("Clássico:") == true;
+
   String get statusText {
     if (!isConnected) return 'Desconectado';
     
     switch (type) {
       case ConnectionType.bluetooth:
-        return 'Conectado via Bluetooth${deviceName != null ? ' - $deviceName' : ''}';
+        // MODIFICADO: Texto mais específico para Bluetooth
+        if (isBle) {
+          return 'Conectado via Bluetooth LE${deviceName != null ? ' - $deviceName' : ''}';
+        } else if (isClassicBt) {
+          return 'Conectado via Bluetooth Clássico${deviceName != null ? ' - $deviceName' : ''}';
+        } else {
+          return 'Conectado via Bluetooth${deviceName != null ? ' - $deviceName' : ''}';
+        }
       case ConnectionType.usb:
         return 'Conectado via USB${deviceName != null ? ' - $deviceName' : ''}';
       // ADICIONADO: Texto de status para Wi-Fi Direct.

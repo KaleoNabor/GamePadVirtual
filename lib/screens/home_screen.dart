@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:gamepadvirtual/models/connection_state.dart' as models;
 import 'package:gamepadvirtual/screens/gamepad_screen.dart';
 import 'package:gamepadvirtual/screens/layout_selection_screen.dart';
@@ -32,7 +33,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // 'detached' é o estado chamado quando o app está sendo finalizado de vez.
     if (state == AppLifecycleState.detached) {
       if (_connectionState.isConnected) {
         _connectionService.sendDisconnectSignal();
@@ -40,9 +40,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Abre um pop-up para procurar e listar servidores na rede.
   void _discoverAndShowServers() {
-    _connectionService.discoverServers(); // Inicia a descoberta
+    _connectionService.discoverServers();
 
     showModalBottomSheet(
       context: context,
@@ -84,11 +83,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               title: Text(server.name),
                               subtitle: Text(server.ipAddress.address),
                               onTap: () async {
-                                Navigator.pop(context); // Fecha o pop-up
+                                Navigator.pop(context);
                                 final success = await _connectionService.connectToServer(server);
-                                if (!success && mounted) {
+                                
+                                // CORREÇÃO: Verificação mounted
+                                if (!mounted) return;
+                                
+                                if (!success) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Falha ao conectar ao servidor.')),
+                                    const SnackBar(content: Text('Falha ao conectar ao servidor. Verifique se o servidor está rodando e o firewall do PC.')),
                                   );
                                 }
                               },
@@ -104,15 +107,229 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       },
     ).whenComplete(() {
-      _connectionService.stopDiscovery(); // Para a descoberta quando o pop-up é fechado
+      _connectionService.stopDiscovery();
+    });
+  }
+
+  void _showBluetoothConnectionDialog() async {
+    var scanPermission = await Permission.bluetoothScan.request();
+    var connectPermission = await Permission.bluetoothConnect.request();
+
+    if (scanPermission.isDenied || connectPermission.isDenied) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permissões de Bluetooth são necessárias para encontrar o servidor.'))
+      );
+      return;
+    }
+    
+    _connectionService.discoverAllBluetoothDevices();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StreamBuilder<List<DiscoveredBluetoothDevice>>(
+          stream: _connectionService.unifiedBluetoothDevicesStream,
+          initialData: const [],
+          builder: (context, snapshot) {
+            final devices = snapshot.data ?? [];
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.4,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Dispositivos Bluetooth Encontrados', style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: 8),
+                  const Text('Selecione o seu PC. Dispositivos BLE são recomendados para menor latência.'),
+                  const SizedBox(height: 16),
+                  if (snapshot.connectionState == ConnectionState.waiting && devices.isEmpty)
+                    const Expanded(child: Center(child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [ 
+                        CircularProgressIndicator(), 
+                        SizedBox(height: 16), 
+                        Text('Procurando dispositivos...'), 
+                      ],
+                    )))
+                  else if (devices.isEmpty)
+                    const Expanded(child: Center(child: Text('Nenhum dispositivo encontrado.')))
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: devices.length,
+                        itemBuilder: (context, index) {
+                          final device = devices[index];
+                          return Card(
+                            child: ListTile(
+                              leading: Icon(
+                                device.type == DiscoveredDeviceType.ble
+                                  ? Icons.bluetooth_searching 
+                                  : Icons.bluetooth_connected,
+                                color: device.type == DiscoveredDeviceType.ble
+                                  ? Colors.blue 
+                                  : Colors.grey,
+                              ),
+                              title: Text(device.name),
+                              subtitle: Text(device.address),
+                              trailing: device.type == DiscoveredDeviceType.ble
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.green),
+                                    ),
+                                    child: const Text(
+                                      "Recomendado",
+                                      style: TextStyle(
+                                        color: Colors.green,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                              onTap: () async {
+                                Navigator.pop(context);
+                                final success = await _connectionService.connectToBluetoothDevice(device);
+                                
+                                // CORREÇÃO: Verificação mounted
+                                if (!mounted) return;
+                                
+                                if (!success) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Falha ao conectar ao dispositivo. Verifique se o servidor está rodando e o firewall do PC.')),
+                                  );
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      _connectionService.stopAllBluetoothDiscovery();
     });
   }
 
   // =======================================================================
-  // NOVA FUNÇÃO: Procurar e listar servidores BLE
+  // FUNÇÃO MANTIDA: Listar e conectar a dispositivos pareados (Bluetooth Clássico)
+  // =======================================================================
+  void _listAndConnectPairedDevices() async {
+    // 1. Solicitar permissões
+    var connectPermission = await Permission.bluetoothConnect.request();
+    if (connectPermission.isDenied) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permissão de conexão Bluetooth é necessária.'))
+      );
+      return;
+    }
+    
+    // 2. Obter a lista de dispositivos pareados do serviço
+    final List<BluetoothDevice> pairedDevices = await _connectionService.getPairedDevices();
+
+    // 3. Mostrar o modal com a lista
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.4,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Dispositivos Pareados', style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 8),
+              const Text('Selecione o seu PC. Se ele não aparecer, pareie-o primeiro nas configurações de Bluetooth do seu celular.'),
+              const SizedBox(height: 16),
+              if (pairedDevices.isEmpty)
+                const Expanded(child: Center(child: Text('Nenhum dispositivo pareado encontrado.')))
+              else
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: pairedDevices.length,
+                    itemBuilder: (context, index) {
+                      final device = pairedDevices[index];
+                      return Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.computer),
+                          title: Text(device.name ?? "Dispositivo sem nome"),
+                          subtitle: Text(device.address),
+                          onTap: () async {
+                            Navigator.pop(context); // Fecha o modal
+                            final success = await _connectionService.connectToClassicBluetooth(device);
+                            
+                            // =================================================================
+                            // CORREÇÃO: Adicione esta verificação
+                            // =================================================================
+                            // "if (!mounted)" verifica se o widget (a tela) ainda está na árvore.
+                            // Se não estiver, simplesmente não fazemos nada.
+                            if (!mounted) return;
+
+                            if (!success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Falha ao conectar. Verifique se o servidor está rodando e o firewall do PC.')),
+                              );
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // =======================================================================
+  // FUNÇÃO MANTIDA: Menu de opções Bluetooth (para compatibilidade)
+  // =======================================================================
+  void _showBluetoothOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.bluetooth_searching, color: Colors.blue),
+                title: const Text('Procurar Dispositivos BLE'),
+                subtitle: const Text('Recomendado, menor latência.'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _scanAndShowBleDevices();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.bluetooth_connected, color: Colors.grey),
+                title: const Text('Conectar a Dispositivo Pareado'),
+                subtitle: const Text('Modo de compatibilidade (Clássico).'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _listAndConnectPairedDevices();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // =======================================================================
+  // FUNÇÃO MANTIDA: Scan BLE (para compatibilidade)
   // =======================================================================
   void _scanAndShowBleDevices() async {
-    // 1. Solicitar permissões necessárias
     var scanPermission = await Permission.bluetoothScan.request();
     var connectPermission = await Permission.bluetoothConnect.request();
 
@@ -123,15 +340,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
-    // 2. Inicia o scan
     _connectionService.scanForBleDevices();
 
-    // 3. Mostra o modal com os resultados
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) {
-        return StreamBuilder<List<DiscoveredBleDevice>>(
+        return StreamBuilder<List<DiscoveredBluetoothDevice>>(
           stream: _connectionService.discoveredBleDevicesStream,
           initialData: const [],
           builder: (context, snapshot) {
@@ -165,11 +380,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               title: Text(device.name.isNotEmpty ? device.name : "Dispositivo Desconhecido"),
                               subtitle: Text(device.id),
                               onTap: () async {
-                                Navigator.pop(context); // Fecha o pop-up
-                                final success = await _connectionService.connectToBleDevice(device);
-                                if (!success && mounted) {
+                                Navigator.pop(context);
+                                final success = await _connectionService.connectToBleDevice(device.underlyingDevice);
+                                
+                                // CORREÇÃO: Verificação mounted
+                                if (!mounted) return;
+                                
+                                if (!success) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Falha ao conectar ao servidor BLE.')),
+                                    const SnackBar(content: Text('Falha ao conectar ao servidor BLE. Verifique se o servidor está rodando e o firewall do PC.')),
                                   );
                                 }
                               },
@@ -185,12 +404,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       },
     ).whenComplete(() {
-      _connectionService.stopBleScan(); // Para o scan quando o pop-up é fechado
+      _connectionService.stopBleScan();
     });
   }
 
   void _goToGamepad() {
-    // Apenas navega para a tela do controle. A conexão é persistente.
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const GamepadScreen()),
@@ -211,11 +429,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ConnectionStatusCard(connectionState: _connectionState),
             const SizedBox(height: 24),
             
-            // =======================================================================
-            // NOVA LÓGICA: Mostrar o botão de Desconectar ou Conectar
-            // =======================================================================
             if (_connectionState.isConnected)
-              // Se estiver conectado, mostra o botão de Desconectar
               ElevatedButton.icon(
                 icon: const Icon(Icons.link_off),
                 label: const Text('Desconectar'),
@@ -231,7 +445,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               )
             else
-              // Se não, mostra o botão de Conectar
               ElevatedButton.icon(
                 icon: const Icon(Icons.wifi_tethering_rounded),
                 label: const Text('Conectar na Rede'),
@@ -251,21 +464,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey),
               ),
-            // =======================================================================
 
             const SizedBox(height: 24),
             const Divider(),
 
             const SizedBox(height: 16),
 
-            // =======================================================================
-            // BOTÃO DE BLUETOOTH REATIVADO E FUNCIONAL
-            // =======================================================================
             ListTile(
               leading: Icon(Icons.bluetooth, color: Theme.of(context).colorScheme.primary),
-              title: const Text('Conectar via Bluetooth LE'),
-              subtitle: const Text('Menor latência, sem necessidade de pareamento.'),
-              onTap: _scanAndShowBleDevices,
+              title: const Text('Conectar via Bluetooth'),
+              subtitle: const Text('Busca automática por dispositivos BLE e pareados.'),
+              onTap: _showBluetoothConnectionDialog,
               enabled: !_connectionState.isConnected,
             ),
 
@@ -281,7 +490,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 24),
 
-            // BOTÃO RESTAURADO, COMO PEDIDO
             ElevatedButton.icon(
               onPressed: _goToGamepad,
               icon: const Icon(Icons.sports_esports),
