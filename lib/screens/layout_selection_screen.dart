@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
 import 'package:gamepadvirtual/services/storage_service.dart';
-import 'package:gamepadvirtual/screens/custom_layout_editor_screen.dart';
 
 class LayoutSelectionScreen extends StatefulWidget {
   const LayoutSelectionScreen({super.key});
@@ -13,26 +12,17 @@ class LayoutSelectionScreen extends StatefulWidget {
 class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
   final StorageService _storageService = StorageService();
   GamepadLayoutType _selectedLayout = GamepadLayoutType.xbox;
-  bool _hasCustomLayout = false;
 
   @override
   void initState() {
     super.initState();
     _loadSelectedLayout();
-    _checkCustomLayout();
   }
 
   Future<void> _loadSelectedLayout() async {
     final layout = await _storageService.getSelectedLayout();
     setState(() {
       _selectedLayout = layout;
-    });
-  }
-
-  Future<void> _checkCustomLayout() async {
-    final customLayouts = await _storageService.getCustomLayouts();
-    setState(() {
-      _hasCustomLayout = customLayouts.isNotEmpty;
     });
   }
 
@@ -84,10 +74,6 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
                       layoutType: GamepadLayoutType.nintendo,
                       description: 'Layout do Nintendo com botões A, B, X, Y preto e branco',
                     ),
-                    const SizedBox(height: 16),
-                    
-                    // Custom Layout
-                    _buildCustomLayoutOption(),
                   ],
                 ),
               ),
@@ -207,107 +193,6 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
     );
   }
 
-  Widget _buildCustomLayoutOption() {
-    final isSelected = _selectedLayout == GamepadLayoutType.custom;
-
-    return Card(
-      elevation: isSelected ? 8 : 2,
-      child: InkWell(
-        onTap: _hasCustomLayout
-            ? () {
-                setState(() {
-                  _selectedLayout = GamepadLayoutType.custom;
-                });
-              }
-            : null,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: isSelected
-                ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
-                : null,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Radio<GamepadLayoutType>(
-                    value: GamepadLayoutType.custom,
-                    groupValue: _selectedLayout,
-                    onChanged: _hasCustomLayout
-                        ? (value) {
-                            if (value != null) {
-                              setState(() {
-                                _selectedLayout = value;
-                              });
-                            }
-                          }
-                        : null,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Personalizado',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: _hasCustomLayout ? null : Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _hasCustomLayout
-                              ? 'Seu layout personalizado'
-                              : 'Crie seu próprio layout primeiro',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: _hasCustomLayout ? null : Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _goToCustomEditor,
-                    icon: const Icon(Icons.edit),
-                    tooltip: 'Editar layout personalizado',
-                  ),
-                ],
-              ),
-              if (!_hasCustomLayout) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, 
-                          color: Colors.orange, size: 16),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'Disponível após criar um layout',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Color _getTextColor(Color backgroundColor) {
     // Calculate luminance to determine if text should be white or black
     final luminance = backgroundColor.computeLuminance();
@@ -324,14 +209,5 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
     );
     
     Navigator.pop(context);
-  }
-
-  void _goToCustomEditor() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const CustomLayoutEditorScreen(),
-      ),
-    ).then((_) => _checkCustomLayout());
   }
 }

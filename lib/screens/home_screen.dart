@@ -40,6 +40,81 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _showInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Onde baixar o Servidor?'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Para usar este aplicativo, você precisa do servidor rodando no seu PC. '
+                  'Baixe a versão mais recente do servidor no link abaixo:',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: () {
+                    // Aqui você pode adicionar a lógica para abrir o link
+                    // Por exemplo: launchUrl(Uri.parse('https://github.com/seu-usuario/gamepad-virtual-server'));
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.link, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'https://github.com/seu-usuario/gamepad-virtual-server',
+                            style: TextStyle(
+                              color: Colors.blue,
+                              decoration: TextDecoration.underline,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Instruções:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '1. Baixe e execute o servidor no PC\n'
+                  '2. Conecte PC e celular na mesma rede\n'
+                  '3. Use este app para conectar e jogar',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Fechar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _discoverAndShowServers() {
     _connectionService.discoverServers();
 
@@ -86,7 +161,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 Navigator.pop(context);
                                 final success = await _connectionService.connectToServer(server);
                                 
-                                // CORREÇÃO: Verificação mounted
                                 if (!mounted) return;
                                 
                                 if (!success) {
@@ -194,7 +268,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 Navigator.pop(context);
                                 final success = await _connectionService.connectToBluetoothDevice(device);
                                 
-                                // CORREÇÃO: Verificação mounted
                                 if (!mounted) return;
                                 
                                 if (!success) {
@@ -219,11 +292,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  // =======================================================================
-  // FUNÇÃO MANTIDA: Listar e conectar a dispositivos pareados (Bluetooth Clássico)
-  // =======================================================================
   void _listAndConnectPairedDevices() async {
-    // 1. Solicitar permissões
     var connectPermission = await Permission.bluetoothConnect.request();
     if (connectPermission.isDenied) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -232,10 +301,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
     
-    // 2. Obter a lista de dispositivos pareados do serviço
     final List<BluetoothDevice> pairedDevices = await _connectionService.getPairedDevices();
 
-    // 3. Mostrar o modal com a lista
     showModalBottomSheet(
       context: context,
       builder: (ctx) {
@@ -263,14 +330,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           title: Text(device.name ?? "Dispositivo sem nome"),
                           subtitle: Text(device.address),
                           onTap: () async {
-                            Navigator.pop(context); // Fecha o modal
+                            Navigator.pop(context);
                             final success = await _connectionService.connectToClassicBluetooth(device);
                             
-                            // =================================================================
-                            // CORREÇÃO: Adicione esta verificação
-                            // =================================================================
-                            // "if (!mounted)" verifica se o widget (a tela) ainda está na árvore.
-                            // Se não estiver, simplesmente não fazemos nada.
                             if (!mounted) return;
 
                             if (!success) {
@@ -291,9 +353,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // =======================================================================
-  // FUNÇÃO MANTIDA: Menu de opções Bluetooth (para compatibilidade)
-  // =======================================================================
   void _showBluetoothOptions() {
     showModalBottomSheet(
       context: context,
@@ -326,9 +385,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // =======================================================================
-  // FUNÇÃO MANTIDA: Scan BLE (para compatibilidade)
-  // =======================================================================
   void _scanAndShowBleDevices() async {
     var scanPermission = await Permission.bluetoothScan.request();
     var connectPermission = await Permission.bluetoothConnect.request();
@@ -383,7 +439,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 Navigator.pop(context);
                                 final success = await _connectionService.connectToBleDevice(device.underlyingDevice);
                                 
-                                // CORREÇÃO: Verificação mounted
                                 if (!mounted) return;
                                 
                                 if (!success) {
@@ -415,11 +470,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _goToLayoutSelection() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const LayoutSelectionScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('GamePadVirtual'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: _showInfoDialog,
+            tooltip: 'Informações do Servidor',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -465,37 +534,58 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 style: TextStyle(color: Colors.grey),
               ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Botão Bluetooth - Substituído ListTile por ElevatedButton
+            ElevatedButton.icon(
+              icon: Icon(Icons.bluetooth, color: Theme.of(context).colorScheme.onPrimary),
+              label: const Text('Conectar via Bluetooth'),
+              onPressed: _connectionState.isConnected ? null : _showBluetoothConnectionDialog,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (!_connectionState.isConnected)
+              const Text(
+                'Busca automática por dispositivos BLE e pareados.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+
+            const SizedBox(height: 16),
             const Divider(),
 
             const SizedBox(height: 16),
 
-            ListTile(
-              leading: Icon(Icons.bluetooth, color: Theme.of(context).colorScheme.primary),
-              title: const Text('Conectar via Bluetooth'),
-              subtitle: const Text('Busca automática por dispositivos BLE e pareados.'),
-              onTap: _showBluetoothConnectionDialog,
-              enabled: !_connectionState.isConnected,
+            // Botão Layout - Substituído ListTile por OutlinedButton
+            OutlinedButton.icon(
+              icon: const Icon(Icons.tune),
+              label: const Text('Selecionar Layout do Controle'),
+              onPressed: _goToLayoutSelection,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontSize: 16),
+                side: BorderSide(color: Theme.of(context).colorScheme.outline),
+                foregroundColor: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
 
-            ListTile(
-              leading: const Icon(Icons.tune),
-              title: const Text('Selecionar Layout do Controle'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LayoutSelectionScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
+            // Botão Ir para Controle - Com cor secundária
             ElevatedButton.icon(
               onPressed: _goToGamepad,
               icon: const Icon(Icons.sports_esports),
               label: const Text('Ir para o Controle'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                foregroundColor: Theme.of(context).colorScheme.onSecondary,
               ),
             ),
 

@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.input.InputManager
 import android.os.Build
+import android.os.Vibrator
+import android.os.VibrationEffect
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -26,6 +28,9 @@ class MainActivity: FlutterActivity() {
     private var inputManager: InputManager? = null
     private var currentGamepadDevice: InputDevice? = null
 
+    // 2. ADICIONE UMA VARIÁVEL PARA O VIBRADOR
+    private var vibrator: Vibrator? = null
+
     // --- Receptor para o Serviço de Descoberta ---
     private val serverFoundReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -38,6 +43,9 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // 3. INICIALIZE O VIBRADOR DENTRO DE configureFlutterEngine
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
         // --- Configuração do Canal de Gamepad Externo ---
         gamepadInputChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GAMEPAD_CHANNEL)
@@ -284,7 +292,26 @@ class MainActivity: FlutterActivity() {
         return if (kotlin.math.abs(value) > 0.1f) value.toDouble() else 0.0
     }
 
+    // 4. ADICIONE A FUNÇÃO DE VIBRAÇÃO DENTRO DA CLASSE MainActivity
+    private fun triggerHapticFeedback() {
+        // Por enquanto, vamos assumir que a vibração está sempre ativa quando o app está aberto.
+        // Podemos refinar isso depois se necessário.
+        val duration = 50L // 50 milissegundos
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator?.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(duration)
+        }
+    }
+
+    // 5. MODIFIQUE A FUNÇÃO handleGamepadButton PARA CHAMAR A VIBRAÇÃO
     private fun handleGamepadButton(keyCode: Int, isPressed: Boolean) {
+        // <<< ADICIONE ESTA LINHA >>>
+        if (isPressed) {
+            triggerHapticFeedback()
+        }
+
         val buttonName = when (keyCode) {
             KeyEvent.KEYCODE_BUTTON_A -> "BUTTON_A"
             KeyEvent.KEYCODE_BUTTON_B -> "BUTTON_B"

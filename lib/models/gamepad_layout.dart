@@ -2,7 +2,6 @@ enum GamepadLayoutType {
   xbox,
   playstation,
   nintendo,
-  custom,
 }
 
 enum ButtonType {

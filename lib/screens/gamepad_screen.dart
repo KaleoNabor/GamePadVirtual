@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gamepadvirtual/models/connection_state.dart' as models;
-import 'package:gamepadvirtual/models/custom_layout.dart';
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
 import 'package:gamepadvirtual/services/connection_service.dart';
 import 'package:gamepadvirtual/services/storage_service.dart';
@@ -32,8 +31,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
   models.ConnectionState _connectionState = models.ConnectionState.disconnected();
   models.ConnectionState _externalGamepadState = models.ConnectionState.disconnected();
   GamepadLayout _predefinedLayout = GamepadLayout.xbox;
-  CustomLayout? _customLayout;
-  bool get _isCustomLayout => _customLayout != null;
   bool _isLoading = true;
 
   // INPUT STATE
@@ -57,8 +54,7 @@ class _GamepadScreenState extends State<GamepadScreen> {
   bool _hasNewInput = false;
 
   Map<String, ButtonType> get _externalGamepadMapping {
-    final layoutType = _isCustomLayout ? GamepadLayoutType.custom : _predefinedLayout.type;
-    switch (layoutType) {
+    switch (_predefinedLayout.type) {
       case GamepadLayoutType.playstation:
         return {
           'BUTTON_A': ButtonType.cross, 'BUTTON_B': ButtonType.circle, 'BUTTON_X': ButtonType.square, 'BUTTON_Y': ButtonType.triangle,
@@ -259,9 +255,7 @@ class _GamepadScreenState extends State<GamepadScreen> {
             ? const Center(child: CircularProgressIndicator())
             : isExternalMode
                 ? _buildExternalGamepadView()
-                : _isCustomLayout
-                    ? _buildCustomGamepadView()
-                    : _buildPredefinedGamepadView(),
+                : _buildPredefinedGamepadView(),
       ),
     );
   }
@@ -390,13 +384,10 @@ class _GamepadScreenState extends State<GamepadScreen> {
     _rumbleEnabled = await _storageService.isRumbleEnabled();
     
     final layoutType = await _storageService.getSelectedLayout();
-    if (layoutType == GamepadLayoutType.custom) {
-      final customLayouts = await _storageService.getCustomLayouts();
-      _customLayout = customLayouts.isNotEmpty ? customLayouts.first : null;
-    } else {
-      _customLayout = null;
-      _predefinedLayout = GamepadLayout.predefinedLayouts.firstWhere((l) => l.type == layoutType, orElse: () => GamepadLayout.xbox);
-    }
+    _predefinedLayout = GamepadLayout.predefinedLayouts.firstWhere(
+      (l) => l.type == layoutType, 
+      orElse: () => GamepadLayout.xbox
+    );
   }
 
   Future<void> _startEnabledSensors() async {
@@ -478,76 +469,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
     );
   }
 
-  // Os métodos restantes (_buildCustomGamepadView, _buildPredefinedGamepadView, etc.)
-  // permanecem exatamente como estavam no código anterior...
-
-  Widget _buildCustomGamepadView() {
-    if (_customLayout == null) {
-      return const Center(child: Text('Layout customizado não encontrado.'));
-    }
-    final screenSize = MediaQuery.of(context).size;
-    final layout = _customLayout!;
-    return Stack(
-      children: [
-        Positioned(
-          top: 10,
-          left: 10,
-          child: IconButton(
-            onPressed: () {
-              _unlockOrientation();
-              Navigator.pop(context);
-            },
-            icon: const Icon(Icons.arrow_back),
-            style: IconButton.styleFrom(backgroundColor: Colors.white.withAlpha(230)),
-          ),
-        ),
-        Positioned(
-          top: 10,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: ConnectionStatusWidget(connectionState: _connectionState),
-          ),
-        ),
-        if (layout.hasLeftStick)
-          Positioned(
-            left: layout.leftStickPosition.x * screenSize.width,
-            top: layout.leftStickPosition.y * screenSize.height,
-            child: AnalogStick(
-              size: layout.leftStickPosition.size * screenSize.height,
-              label: 'L',
-              isLeft: true,
-              onChanged: (x, y) => _onAnalogStickChanged(true, x, y),
-            ),
-          ),
-        if (layout.hasRightStick)
-          Positioned(
-            left: layout.rightStickPosition.x * screenSize.width,
-            top: layout.rightStickPosition.y * screenSize.height,
-            child: AnalogStick(
-              size: layout.rightStickPosition.size * screenSize.height,
-              label: 'R',
-              isLeft: false,
-              onChanged: (x, y) => _onAnalogStickChanged(false, x, y),
-            ),
-          ),
-        ...layout.buttons.map((button) {
-          final absolutePosition = ButtonPosition(
-            x: button.position.x * screenSize.width,
-            y: button.position.y * screenSize.height,
-            size: button.position.size * screenSize.height,
-            width: button.position.width != null ? button.position.width! * screenSize.height : null,
-          );
-          return Positioned(
-            left: absolutePosition.x,
-            top: absolutePosition.y,
-            child: _buildDynamicButton(button.copyWith(position: absolutePosition)),
-          );
-        }),
-      ],
-    );
-  }
-
   Widget _buildPredefinedGamepadView() {
     return Stack(
       children: [
@@ -616,57 +537,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildDynamicButton(CustomLayoutButton button) {
-    final isShoulder = _isShoulderButton(button.type);
-    final isDpad = _isDpad(button.type);
-    final isSystem = button.type == ButtonType.select || button.type == ButtonType.start;
-    
-    return GestureDetector(
-      onTapDown: (_) => _onButtonPressed(button.type),
-      onTapUp: (_) => _onButtonReleased(button.type),
-      onTapCancel: () => _onButtonReleased(button.type),
-      child: Container(
-        width: button.position.width ?? button.position.size,
-        height: button.position.size,
-        decoration: BoxDecoration(
-          color: isDpad ? Colors.grey.shade800 : Color(button.color),
-          borderRadius: BorderRadius.circular(isShoulder || isSystem || isDpad ? 12 : 100),
-        ),
-        child: Center(
-          child: _buildButtonChild(button)
-        ),
-      ),
-    );
-  }
-
-  bool _isShoulderButton(ButtonType t) => t == ButtonType.leftBumper || t == ButtonType.rightBumper || t == ButtonType.leftTrigger || t == ButtonType.rightTrigger;
-  bool _isDpad(ButtonType t) => t == ButtonType.dpadUp || t == ButtonType.dpadDown || t == ButtonType.dpadLeft || t == ButtonType.dpadRight;
-  
-  Widget _buildButtonChild(CustomLayoutButton button) {
-    Color textColor = _getTextColor(Color(button.color));
-    double size = button.position.size;
-    
-    if (_isDpad(button.type)) {
-      IconData icon;
-      switch (button.type) {
-        case ButtonType.dpadUp: icon = Icons.keyboard_arrow_up; break;
-        case ButtonType.dpadDown: icon = Icons.keyboard_arrow_down; break;
-        case ButtonType.dpadLeft: icon = Icons.keyboard_arrow_left; break;
-        default: icon = Icons.keyboard_arrow_right;
-      }
-      return Icon(icon, color: Colors.white, size: size * 0.8);
-    }
-    
-    return Text(
-      button.label,
-      style: TextStyle(
-        color: textColor,
-        fontWeight: FontWeight.bold,
-        fontSize: size * 0.5,
-      ),
     );
   }
 

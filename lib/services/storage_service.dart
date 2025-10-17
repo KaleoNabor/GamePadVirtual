@@ -1,11 +1,9 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
-import 'package:gamepadvirtual/models/custom_layout.dart';
 
 class StorageService {
   static const String _selectedLayoutKey = 'selected_layout';
-  static const String _customLayoutsKey = 'custom_layouts';
   // MODIFICADO: Renomeado para clareza
   static const String _hapticFeedbackEnabledKey = 'haptic_feedback_enabled';
   // ADICIONADO: Nova chave para a vibração do jogo (rumble)
@@ -28,35 +26,6 @@ class StorageService {
   Future<void> setSelectedLayout(GamepadLayoutType layout) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_selectedLayoutKey, layout.toString());
-  }
-
-  Future<List<CustomLayout>> getCustomLayouts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final layoutsString = prefs.getStringList(_customLayoutsKey);
-    if (layoutsString != null) {
-      return layoutsString
-          .map((layoutString) => CustomLayout.fromJson(jsonDecode(layoutString)))
-          .toList();
-    }
-    return [];
-  }
-
-  Future<void> saveCustomLayout(CustomLayout layout) async {
-    final prefs = await SharedPreferences.getInstance();
-    final layouts = await getCustomLayouts();
-    layouts.removeWhere((existing) => existing.name == layout.name);
-    layouts.add(layout);
-    final layoutStrings = layouts.map((l) => jsonEncode(l.toJson())).toList();
-    await prefs.setStringList(_customLayoutsKey, layoutStrings);
-  }
-  
-  Future<void> deleteCustomLayout(String name) async {
-    final prefs = await SharedPreferences.getInstance();
-    final layouts = await getCustomLayouts();
-    layouts.removeWhere((layout) => layout.name == name);
-    
-    final layoutStrings = layouts.map((l) => jsonEncode(l.toJson())).toList();
-    await prefs.setStringList(_customLayoutsKey, layoutStrings);
   }
 
   // MODIFICADO: Renomeado para clareza
