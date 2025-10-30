@@ -124,8 +124,9 @@ class StorageService {
     final String? jsonString = prefs.getString(_customLayoutKey);
 
     if (jsonString == null) {
-      // Nenhum layout salvo, retorna o padrão
-      return defaultGamepadLayout;
+      // ANTES: return defaultGamepadLayout;
+      // DEPOIS (CORRETO):
+      return List.from(defaultGamepadLayout);
     }
 
     try {
@@ -139,8 +140,9 @@ class StorageService {
       return layout;
     } catch (e) {
       print('Erro ao carregar layout customizado: $e');
-      // Em caso de erro (ex: dados corrompidos), retorna o padrão
-      return defaultGamepadLayout;
+      // ANTES: return defaultGamepadLayout;
+      // DEPOIS (CORRETO):
+      return List.from(defaultGamepadLayout);
     }
   }
 

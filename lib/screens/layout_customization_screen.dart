@@ -22,8 +22,9 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
   GamepadLayout _gamepadLayout = GamepadLayout.xbox;
   ConfigurableElement? _selectedElement;
 
-  // (Request 3) Define a altura da "faixa" superior
-  final double _topBarHeight = 60.0;
+  // ANTES: final double _topBarHeight = 60.0;
+  // DEPOIS (CORRETO):
+  final double _topSafeMargin = 70.0; // Espaço no topo onde os botões não podem ir
 
   @override
   void initState() {
@@ -84,12 +85,15 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     if (confirm != true || !mounted) return;
 
     await _storageService.resetLayoutToDefault();
-    final configs = await _storageService.loadCustomLayout();
+    // Recarrega o layout padrão na tela
+    setState(() {
+      // ANTES: _layoutConfig = defaultGamepadLayout;
+      // DEPOIS (CORRETO):
+      _layoutConfig = List.from(defaultGamepadLayout);
+      _selectedElement = null;
+    });
+
     if (mounted) {
-      setState(() {
-        _layoutConfig = configs;
-        _selectedElement = null;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Layout resetado para o padrão.')),
       );
@@ -212,56 +216,57 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     );
   }
 
-  // (Request 2) Widget da "faixa" superior
+  // --- SUBSTITUA ESTE MÉTODO INTEIRO ---
   Widget _buildTopBar() {
     return Positioned(
-      top: 0,
+      top: 10, // Distância do topo da tela
       left: 0,
       right: 0,
-      height: _topBarHeight,
-      child: Container(
-        color: Colors.black.withOpacity(0.5),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Botão Voltar
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              color: Colors.white,
-              tooltip: 'Voltar',
-              onPressed: () => Navigator.pop(context),
-            ),
-            const Text(
-              'Arraste para mover, toque para selecionar',
-              style: TextStyle(color: Colors.white70),
-            ),
-            Row(
-              children: [
-                // Botão de Propriedades
-                IconButton(
-                  icon: const Icon(Icons.tune),
-                  color: _selectedElement != null ? Colors.white : Colors.grey,
-                  tooltip: 'Propriedades',
-                  onPressed: _selectedElement == null ? null : _showPropertiesDialog,
-                ),
-                // Botão de Resetar
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  color: Colors.white,
-                  tooltip: 'Resetar Layout',
-                  onPressed: _resetLayout,
-                ),
-                // Botão de Salvar
-                IconButton(
-                  icon: const Icon(Icons.save),
-                  color: Colors.white,
-                  tooltip: 'Salvar Layout',
-                  onPressed: _saveLayout,
-                ),
-              ],
-            )
-          ],
+      child: Center( // Centraliza a "pílula"
+        child: Container(
+          height: 50, // Altura da pílula
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.9), // Cor laranja (como o status)
+            borderRadius: BorderRadius.circular(12), // Bordas arredondadas
+            border: Border.all(color: Colors.orange, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 8,
+              )
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min, // Encolhe para caber os botões
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                color: Colors.white,
+                tooltip: 'Voltar',
+                onPressed: () => Navigator.pop(context),
+              ),
+              const VerticalDivider(color: Colors.white24, indent: 10, endIndent: 10),
+              IconButton(
+                icon: const Icon(Icons.tune),
+                color: _selectedElement != null ? Colors.white : Colors.white54,
+                tooltip: 'Propriedades',
+                onPressed: _selectedElement == null ? null : _showPropertiesDialog,
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                color: Colors.white,
+                tooltip: 'Resetar Layout',
+                onPressed: _resetLayout,
+              ),
+              IconButton(
+                icon: const Icon(Icons.save),
+                color: Colors.white,
+                tooltip: 'Salvar Layout',
+                onPressed: _saveLayout,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -288,11 +293,13 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
                 .indexWhere((c) => c.element == config.element);
             
             if (index != -1) {
-              // (Request 3 & 7) Prende na tela e abaixo da "faixa"
+              // (Request 3) Trava na tela E abaixo da "zona proibida"
               double newX = details.offset.dx.clamp(0, screenSize.width - config.width);
-              double newY = details.offset.dy.clamp(_topBarHeight, screenSize.height - config.height);
+              
+              // ANTES: double newY = details.offset.dy.clamp(_topBarHeight, ...
+              // DEPOIS (CORRETO):
+              double newY = details.offset.dy.clamp(_topSafeMargin, screenSize.height - config.height);
 
-              // Converte de volta para relativo (0.0-1.0) antes de salvar
               _layoutConfig![index] = config.copyWith(
                 x: newX / screenSize.width, 
                 y: newY / screenSize.height
@@ -351,8 +358,6 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
   }
 
   // --- Métodos de Build (Sem callbacks de input) ---
-  // (O resto deste arquivo contém os métodos _build... que você já tem)
-  // (Eles não precisam de alteração)
   Color _getTextColor(Color backgroundColor) {
     return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
   }
