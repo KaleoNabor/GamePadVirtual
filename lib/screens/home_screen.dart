@@ -190,9 +190,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     var connectPermission = await Permission.bluetoothConnect.request();
 
     if (scanPermission.isDenied || connectPermission.isDenied) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Permissões de Bluetooth são necessárias para encontrar o servidor.'))
       );
+      }
       return;
     }
     
@@ -295,9 +297,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _listAndConnectPairedDevices() async {
     var connectPermission = await Permission.bluetoothConnect.request();
     if (connectPermission.isDenied) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Permissão de conexão Bluetooth é necessária.'))
       );
+      }
       return;
     }
     
@@ -390,9 +394,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     var connectPermission = await Permission.bluetoothConnect.request();
 
     if (scanPermission.isDenied || connectPermission.isDenied) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Permissões de Bluetooth são necessárias para encontrar o servidor.'))
       );
+      }
       return;
     }
 

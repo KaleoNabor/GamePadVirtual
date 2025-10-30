@@ -48,7 +48,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
   bool _gyroscopeEnabled = true;
   bool _accelerometerEnabled = true;
   bool _rumbleEnabled = true;
-  bool _isBackgroundServiceRunning = false;
 
   Timer? _gameLoopTimer;
   bool _hasNewInput = false;
@@ -99,12 +98,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
       if (mounted) setState(() => _externalGamepadState = state);
     });
     _gamepadInputService.inputStream.listen(_onExternalGamepadInput);
-    
-    _gamepadInputService.serviceStatusStream.listen((status) {
-      if(mounted) {
-        setState(() => _isBackgroundServiceRunning = (status == "STARTED"));
-      }
-    });
 
     if (mounted) {
       setState(() {
@@ -148,9 +141,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
     _sensorService.stopAllSensors();
     _unlockOrientation();
     WakelockPlus.disable();
-    if(_isBackgroundServiceRunning) {
-      _gamepadInputService.stopGamepadService();
-    }
     super.dispose();
   }
   
@@ -231,15 +221,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
     else { _sensorService.stopAccelerometer(); _accelX = _accelY = _accelZ = 0.0; } 
   }
 
-  Future<void> _toggleBackgroundMode(bool enabled) async {
-    setState(() => _isBackgroundServiceRunning = enabled);
-    if(enabled) {
-      _gamepadInputService.startGamepadService(hapticsEnabled: _hapticFeedbackEnabled);
-    } else {
-      _gamepadInputService.stopGamepadService();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final bool isExternalMode = _externalGamepadState.isConnected && _externalGamepadState.isExternalGamepad;
@@ -306,16 +287,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
                     value: _accelerometerEnabled,
                     onChanged: (value) {
                       _toggleAccelerometer(value);
-                      setModalState(() {});
-                    },
-                  ),
-                  const Divider(),
-                   SwitchListTile(
-                    title: const Text('Funcionar em Segundo Plano'),
-                    subtitle: const Text('Mantém o controle ativo com o app minimizado.'),
-                    value: _isBackgroundServiceRunning,
-                    onChanged: (value) {
-                      _toggleBackgroundMode(value);
                       setModalState(() {});
                     },
                   ),

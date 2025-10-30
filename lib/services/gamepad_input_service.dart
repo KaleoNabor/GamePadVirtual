@@ -13,12 +13,9 @@ class GamepadInputService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<ConnectionState> _connectionController =
       StreamController<ConnectionState>.broadcast();
-  final StreamController<String> _serviceStatusController =
-      StreamController<String>.broadcast();
 
   Stream<Map<String, dynamic>> get inputStream => _inputController.stream;
   Stream<ConnectionState> get connectionStream => _connectionController.stream;
-  Stream<String> get serviceStatusStream => _serviceStatusController.stream;
 
   bool _isInitialized = false;
   ConnectionState _currentState = ConnectionState.disconnected();
@@ -64,31 +61,11 @@ class GamepadInputService {
         _inputController.add(inputData);
         break;
 
-      case 'onServiceStatus':
-        final status = call.arguments['status'] ?? '';
-        _serviceStatusController.add(status);
-        print('Status do serviço: $status');
-        break;
+      // O caso 'onServiceStatus' foi removido
     }
   }
 
-  Future<void> startGamepadService({required bool hapticsEnabled}) async {
-    try {
-      await _channel.invokeMethod('startGamepadService', {'hapticsEnabled': hapticsEnabled});
-      _serviceStatusController.add("STARTED"); 
-    } catch (e) {
-      print('Erro ao iniciar serviço de gamepad: $e');
-    }
-  }
-
-  Future<void> stopGamepadService() async {
-    try {
-      await _channel.invokeMethod('stopGamepadService');
-      _serviceStatusController.add("STOPPED");
-    } catch (e) {
-      print('Erro ao parar serviço de gamepad: $e');
-    }
-  }
+  // Os métodos startGamepadService e stopGamepadService foram removidos
 
   // Esta função envia dados PARA um gamepad externo (ex: rumble), não para o PC.
   // A deixamos aqui para usos futuros.
@@ -111,6 +88,6 @@ class GamepadInputService {
   void dispose() {
     _inputController.close();
     _connectionController.close();
-    _serviceStatusController.close();
+    // O _serviceStatusController.close() foi removido
   }
 }

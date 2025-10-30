@@ -28,7 +28,7 @@ class MainActivity: FlutterActivity() {
     private var inputManager: InputManager? = null
     private var currentGamepadDevice: InputDevice? = null
 
-    // 2. ADICIONE UMA VARIÁVEL PARA O VIBRADOR
+    // Variável para o Vibrator
     private var vibrator: Vibrator? = null
 
     // --- Receptor para o Serviço de Descoberta ---
@@ -44,7 +44,7 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // 3. INICIALIZE O VIBRADOR DENTRO DE configureFlutterEngine
+        // Inicialize o Vibrator
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
         // --- Configuração do Canal de Gamepad Externo ---
@@ -65,15 +65,7 @@ class MainActivity: FlutterActivity() {
                         result.success(null)
                     }
                 }
-                "startGamepadService" -> {
-                    val hapticsEnabled = call.argument<Boolean>("hapticsEnabled") ?: true
-                    startGamepadService(hapticsEnabled)
-                    result.success(null)
-                }
-                "stopGamepadService" -> {
-                    stopGamepadService()
-                    result.success(null)
-                }
+                // Os casos "startGamepadService" e "stopGamepadService" foram removidos
                 else -> result.notImplemented()
             }
         }
@@ -129,30 +121,6 @@ class MainActivity: FlutterActivity() {
         stopService(intent)
     }
 
-
-    // =========================================================================
-    //  TODA A LÓGICA DE DETECÇÃO DE GAMEPAD EXTERNO PERMANECE AQUI (SEM ALTERAÇÕES)
-    // =========================================================================
-    
-    private fun startGamepadService(hapticsEnabled: Boolean) {
-        val serviceIntent = Intent(this, GamepadInputForegroundService::class.java).apply {
-            action = GamepadInputForegroundService.ACTION_START_SERVICE
-            putExtra("HAPTICS_ENABLED", hapticsEnabled)
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
-    }
-
-    private fun stopGamepadService() {
-        val serviceIntent = Intent(this, GamepadInputForegroundService::class.java)
-        serviceIntent.action = GamepadInputForegroundService.ACTION_STOP_SERVICE
-        startService(serviceIntent)
-    }
-
     @SuppressLint("NewApi")
     private fun initializeGamepadDetection() {
         inputManager = getSystemService(Context.INPUT_SERVICE) as InputManager
@@ -169,7 +137,6 @@ class MainActivity: FlutterActivity() {
                 if (currentGamepadDevice?.id == deviceId) {
                     currentGamepadDevice = null
                     sendGamepadDisconnected()
-                    stopGamepadService()
                 }
             }
             override fun onInputDeviceChanged(deviceId: Int) {
@@ -216,10 +183,9 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    // Handlers de input SEM as verificações do serviço
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-        if (GamepadInputForegroundService.isServiceRunning) {
-            return super.onGenericMotionEvent(event)
-        }
+        // A verificação do serviço foi removida
         if (isGamepadEvent(event)) {
             handleGamepadMotion(event)
             return true
@@ -228,9 +194,7 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (GamepadInputForegroundService.isServiceRunning) {
-            return super.onKeyDown(keyCode, event)
-        }
+        // A verificação do serviço foi removida
         if (isGamepadEvent(event) && isGamepadKey(keyCode)) {
             handleGamepadButton(keyCode, true)
             return true
@@ -239,9 +203,7 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        if (GamepadInputForegroundService.isServiceRunning) {
-            return super.onKeyUp(keyCode, event)
-        }
+        // A verificação do serviço foi removida
         if (isGamepadEvent(event) && isGamepadKey(keyCode)) {
             handleGamepadButton(keyCode, false)
             return true
@@ -292,7 +254,6 @@ class MainActivity: FlutterActivity() {
         return if (kotlin.math.abs(value) > 0.1f) value.toDouble() else 0.0
     }
 
-    // 4. ADICIONE A FUNÇÃO DE VIBRAÇÃO DENTRO DA CLASSE MainActivity
     private fun triggerHapticFeedback() {
         // Por enquanto, vamos assumir que a vibração está sempre ativa quando o app está aberto.
         // Podemos refinar isso depois se necessário.
@@ -305,9 +266,7 @@ class MainActivity: FlutterActivity() {
         }
     }
 
-    // 5. MODIFIQUE A FUNÇÃO handleGamepadButton PARA CHAMAR A VIBRAÇÃO
     private fun handleGamepadButton(keyCode: Int, isPressed: Boolean) {
-        // <<< ADICIONE ESTA LINHA >>>
         if (isPressed) {
             triggerHapticFeedback()
         }
