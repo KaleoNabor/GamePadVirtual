@@ -1,7 +1,10 @@
+// lib/models/gamepad_layout.dart
+
 enum GamepadLayoutType {
   xbox,
   playstation,
   nintendo,
+  custom, // +++ ADICIONE ESTA LINHA +++
 }
 
 enum ButtonType {
