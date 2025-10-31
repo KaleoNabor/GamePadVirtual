@@ -53,7 +53,6 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    // Xbox Layout
                     _buildLayoutOption(
                       layout: GamepadLayout.xbox,
                       layoutType: GamepadLayoutType.xbox,
@@ -61,7 +60,6 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
                     ),
                     const SizedBox(height: 16),
                     
-                    // PlayStation Layout
                     _buildLayoutOption(
                       layout: GamepadLayout.playstation,
                       layoutType: GamepadLayoutType.playstation,
@@ -69,17 +67,15 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
                     ),
                     const SizedBox(height: 16),
                     
-                    // Nintendo Layout
                     _buildLayoutOption(
                       layout: GamepadLayout.nintendo,
                       layoutType: GamepadLayoutType.nintendo,
                       description: 'Layout do Nintendo com botões A, B, X, Y preto e branco',
                     ),
                     
-                    // +++ ADICIONE A 4ª OPÇÃO +++
                     const SizedBox(height: 16),
                     _buildLayoutOption(
-                      layout: null, // Não tem layout pré-definido
+                      layout: null,
                       layoutType: GamepadLayoutType.custom,
                       description: 'Abra o editor para arrastar e posicionar os botões.',
                     ),
@@ -90,7 +86,6 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
             
             const SizedBox(height: 20),
             
-            // Save Button
             ElevatedButton(
               onPressed: _saveLayout,
               style: ElevatedButton.styleFrom(
@@ -115,12 +110,11 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
     required String description,
   }) {
     final isSelected = _selectedLayout == layoutType;
-    final String title = layout?.name ?? 'Personalizado'; 
+    final String title = layout?.name ?? 'Personalizado';
 
     return Card(
       elevation: isSelected ? 8 : 2,
       child: InkWell(
-        // --- MODIFIQUE A LÓGICA DO 'onTap' ---
         onTap: () {
           if (layoutType == GamepadLayoutType.custom) {
             _handleCustomLayoutSelection();
@@ -165,7 +159,7 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          title, // <<< USE O TÍTULO
+                          title,
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -181,7 +175,6 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              // --- SÓ MOSTRA A PRÉVIA DOS BOTÕES SE O LAYOUT NÃO FOR NULO ---
               if (layout != null)
                 Wrap(
                   spacing: 8,
@@ -213,10 +206,7 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
     );
   }
 
-  // +++ ADICIONE ESTA NOVA FUNÇÃO +++
-  /// Mostra o pop-up para escolher o layout base e navega para o editor
   Future<void> _handleCustomLayoutSelection() async {
-    // 1. Mostrar o diálogo para escolher o layout base
     final GamepadLayoutType? baseType = await showDialog<GamepadLayoutType>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -243,26 +233,19 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
 
     if (baseType == null || !mounted) return;
 
-    // 2. Salvar a ESCOLHA BASE no storage
     await _storageService.setCustomLayoutBase(baseType);
-    
-    // 3. Resetar as posições para o padrão (para o caso de estar trocando a base)
-    await _storageService.resetLayoutToDefault();
 
-    // 4. Navegar para a tela de edição
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const LayoutCustomizationScreen()),
     );
 
-    // 5. Ao retornar da tela de edição, marcar "Personalizado" como selecionado
     setState(() {
       _selectedLayout = GamepadLayoutType.custom;
     });
   }
 
   Color _getTextColor(Color backgroundColor) {
-    // Calculate luminance to determine if text should be white or black
     final luminance = backgroundColor.computeLuminance();
     return luminance > 0.5 ? Colors.black : Colors.white;
   }

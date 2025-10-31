@@ -36,6 +36,7 @@ class GamepadLayoutView extends StatefulWidget {
 class _GamepadLayoutViewState extends State<GamepadLayoutView> {
   List<ButtonLayoutConfig>? _layoutConfig;
 
+  // Inicialização e atualização do widget
   @override
   void initState() {
     super.initState();
@@ -55,7 +56,8 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     List<ButtonLayoutConfig> loadedLayout;
 
     if (widget.layoutType == GamepadLayoutType.custom) {
-      loadedLayout = await widget.storageService.loadCustomLayout();
+      final baseType = await widget.storageService.getCustomLayoutBase();
+      loadedLayout = await widget.storageService.loadCustomLayout(baseType);
     } else {
       loadedLayout = defaultGamepadLayout;
     }
@@ -67,22 +69,21 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     }
   }
 
-  // Atualiza estado quando botão é pressionado
+  // Métodos para controle de estado dos botões
   void _onButtonPressed(ButtonType buttonType) {
     widget.gamepadState.onButtonPressed(buttonType);
     if (widget.hapticFeedbackEnabled) widget.vibrationService.vibrateForButton();
   }
 
-  // Atualiza estado quando botão é liberado
   void _onButtonReleased(ButtonType buttonType) {
     widget.gamepadState.onButtonReleased(buttonType);
   }
 
-  // Processa movimento dos analógicos
   void _onAnalogStickChanged(bool isLeft, double x, double y) {
     widget.gamepadState.onAnalogStickChanged(isLeft, x, y);
   }
 
+  // Construção da interface principal do gamepad
   @override
   Widget build(BuildContext context) {
     final Size screenSize = MediaQuery.of(context).size;
@@ -170,12 +171,12 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
-  // Calcula cor do texto baseada no fundo
+  // Métodos auxiliares para cálculo de cores
   Color _getTextColor(Color backgroundColor) {
     return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
   }
 
-  // Constrói D-Pad com 4 direções
+  // Métodos de construção de elementos específicos do gamepad
   Widget _buildDPad(ButtonLayoutConfig config) {
     final buttonSize = config.width / 3;
     
@@ -193,7 +194,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
-  // Constrói botões de ação (A, B, X, Y)
   Widget _buildActionButtons(ButtonLayoutConfig config) {
     final buttons = widget.layout.buttons;
     final buttonSize = config.width / 3;
@@ -212,7 +212,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
-  // Constrói botão do gamepad com feedback visual
   Widget _buildGamepadButton(GamepadButton button, double size) {
     final isPressed = widget.gamepadState.buttonStates[button.type] ?? false;
     return GestureDetector(
@@ -249,7 +248,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
   
-  // Constrói botão direcional individual
   Widget _buildDirectionalButton(IconData icon, ButtonType buttonType, double size) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
@@ -269,7 +267,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
-  // Constrói botão de ombro (L1/R1)
   Widget _buildShoulderButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
@@ -298,7 +295,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
-  // Constrói botão de gatilho (L2/R2)
   Widget _buildTriggerButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
@@ -327,7 +323,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
-  // Constrói botão do analógico (L3/R3)
   Widget _buildStickButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
@@ -356,7 +351,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
-  // Constrói botão do sistema (SELECT/START)
   Widget _buildSystemButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(

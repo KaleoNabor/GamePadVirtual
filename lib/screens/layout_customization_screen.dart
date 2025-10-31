@@ -1,4 +1,5 @@
 // lib/screens/layout_customization_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gamepadvirtual/core/default_layout.dart';
@@ -17,19 +18,15 @@ class LayoutCustomizationScreen extends StatefulWidget {
 
 class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
   final StorageService _storageService = StorageService();
-
   List<ButtonLayoutConfig>? _layoutConfig;
   GamepadLayout _gamepadLayout = GamepadLayout.xbox;
   ConfigurableElement? _selectedElement;
+  final double _topSafeMargin = 70.0;
 
-  // ANTES: final double _topBarHeight = 60.0;
-  // DEPOIS (CORRETO):
-  final double _topSafeMargin = 70.0; // Espaço no topo onde os botões não podem ir
-
+  // Inicialização e configuração da tela
   @override
   void initState() {
     super.initState();
-    // Tela cheia imersiva (sem barras)
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -45,9 +42,10 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     super.dispose();
   }
 
+  // Métodos para carregar e salvar layouts
   Future<void> _loadLayout() async {
     final baseType = await _storageService.getCustomLayoutBase();
-    final configs = await _storageService.loadCustomLayout();
+    final configs = await _storageService.loadCustomLayout(baseType);
     
     if (mounted) {
       setState(() {
@@ -60,7 +58,8 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
 
   Future<void> _saveLayout() async {
     if (_layoutConfig == null) return;
-    await _storageService.saveCustomLayout(_layoutConfig!);
+    await _storageService.saveCustomLayout(_layoutConfig!, _gamepadLayout.type);
+    
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Layout salvo!')),
@@ -69,7 +68,6 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
   }
 
   Future<void> _resetLayout() async {
-    // Pede confirmação
     final bool? confirm = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -84,11 +82,9 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
 
     if (confirm != true || !mounted) return;
 
-    await _storageService.resetLayoutToDefault();
-    // Recarrega o layout padrão na tela
+    await _storageService.resetLayoutToDefault(_gamepadLayout.type);
+    
     setState(() {
-      // ANTES: _layoutConfig = defaultGamepadLayout;
-      // DEPOIS (CORRETO):
       _layoutConfig = List.from(defaultGamepadLayout);
       _selectedElement = null;
     });
@@ -100,6 +96,7 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     }
   }
 
+  // Diálogo para editar propriedades dos elementos
   void _showPropertiesDialog() {
     if (_selectedElement == null) return;
     
@@ -190,25 +187,21 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     );
   }
 
+  // Construção da interface principal
   @override
   Widget build(BuildContext context) {
-    // Remove o padding da barra de status
     return MediaQuery.removePadding(
       context: context,
       removeTop: true,
       child: Scaffold(
-        // (Request 6) Remove a AppBar
         body: _layoutConfig == null
             ? const Center(child: CircularProgressIndicator())
             : Stack(
                 children: [
-                  // Constrói todos os elementos arrastáveis
                   ..._layoutConfig!
                       .where((config) => config.isVisible)
                       .map((config) => _buildDraggableElement(config))
                       .toList(),
-                  
-                  // (Request 2) Adiciona a "faixa" superior
                   _buildTopBar(),
                 ],
               ),
@@ -216,19 +209,19 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     );
   }
 
-  // --- SUBSTITUA ESTE MÉTODO INTEIRO ---
+  // Barra superior de controle
   Widget _buildTopBar() {
     return Positioned(
-      top: 10, // Distância do topo da tela
+      top: 10,
       left: 0,
       right: 0,
-      child: Center( // Centraliza a "pílula"
+      child: Center(
         child: Container(
-          height: 50, // Altura da pílula
+          height: 50,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.9), // Cor laranja (como o status)
-            borderRadius: BorderRadius.circular(12), // Bordas arredondadas
+            color: Colors.orange.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.orange, width: 2),
             boxShadow: [
               BoxShadow(
@@ -238,7 +231,7 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
             ],
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min, // Encolhe para caber os botões
+            mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -272,18 +265,17 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     );
   }
 
+  // Elementos arrastáveis do gamepad
   Widget _buildDraggableElement(ButtonLayoutConfig config) {
     final Size screenSize = MediaQuery.of(context).size;
     final bool isSelected = _selectedElement == config.element;
 
     return Positioned(
-      // Multiplica as coordenadas relativas pelo tamanho da tela
       left: config.x * screenSize.width,
       top: config.y * screenSize.height,
       child: Draggable<ButtonLayoutConfig>(
         data: config,
         feedback: _buildElement(config, isFeedback: true),
-        // (Request 4) Remove o "salto" ao não deixar um "childWhenDragging"
         onDragStarted: () {
           setState(() => _selectedElement = config.element);
         },
@@ -293,11 +285,7 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
                 .indexWhere((c) => c.element == config.element);
             
             if (index != -1) {
-              // (Request 3) Trava na tela E abaixo da "zona proibida"
               double newX = details.offset.dx.clamp(0, screenSize.width - config.width);
-              
-              // ANTES: double newY = details.offset.dy.clamp(_topBarHeight, ...
-              // DEPOIS (CORRETO):
               double newY = details.offset.dy.clamp(_topSafeMargin, screenSize.height - config.height);
 
               _layoutConfig![index] = config.copyWith(
@@ -312,6 +300,7 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     );
   }
 
+  // Widgets para os diferentes tipos de elementos do gamepad
   Widget _buildElement(ButtonLayoutConfig config, {bool isFeedback = false, bool isSelected = false}) {
     final child = Material(
       color: Colors.transparent,
@@ -328,7 +317,6 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
         ConfigurableElement.stickButtonRight => _buildStickButton('R3', ButtonType.rightStickButton, config),
         ConfigurableElement.select => _buildSystemButton('SELECT', ButtonType.select, config),
         ConfigurableElement.start => _buildSystemButton('START', ButtonType.start, config),
-        // (Request 4) Renderiza o botão de Configurações
         ConfigurableElement.floatingSettingsButton => FloatingActionButton(
           onPressed: () {},
           child: const Icon(Icons.settings),
@@ -357,7 +345,7 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     );
   }
 
-  // --- Métodos de Build (Sem callbacks de input) ---
+  // Métodos auxiliares para construção de elementos específicos
   Color _getTextColor(Color backgroundColor) {
     return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
   }

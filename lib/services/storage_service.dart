@@ -7,22 +7,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
 
 class StorageService {
+  // Chaves para armazenamento de preferências
   static const String _selectedLayoutKey = 'selected_layout';
   static const String _hapticFeedbackEnabledKey = 'haptic_feedback_enabled';
   static const String _rumbleEnabledKey = 'rumble_enabled';
   static const String _gyroscopeEnabledKey = 'gyroscope_enabled';
   static const String _accelerometerEnabledKey = 'accelerometer_enabled';
-
-
-  static const String _customLayoutKey = 'custom_layout_config';
-  
-
+  static const String _externalDigitalTriggersKey = 'external_digital_triggers';
   static const String _customLayoutBaseKey = 'custom_layout_base';
 
- 
-  static const String _externalDigitalTriggersKey = 'external_digital_triggers';
+  // Chaves separadas para layouts customizados por tipo
+  static const String _customLayoutKey_Xbox = 'custom_layout_config_xbox';
+  static const String _customLayoutKey_PlayStation = 'custom_layout_config_playstation';
+  static const String _customLayoutKey_Nintendo = 'custom_layout_config_nintendo';
 
-  // --- Métodos de Layout (GamepadType) ---
+  // Métodos para gerenciamento de layout selecionado
   Future<GamepadLayoutType> getSelectedLayout() async {
     final prefs = await SharedPreferences.getInstance();
     final layoutString = prefs.getString(_selectedLayoutKey);
@@ -39,17 +38,14 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_selectedLayoutKey, layout.toString());
   }
-  
 
-  /// Salva qual é o layout base (Xbox, PS) para a personalização
+  // Métodos para gerenciamento do layout base da personalização
   Future<void> setCustomLayoutBase(GamepadLayoutType layout) async {
     final prefs = await SharedPreferences.getInstance();
-    // Garante que não salvemos 'custom' como base
     if (layout == GamepadLayoutType.custom) return;
     await prefs.setString(_customLayoutBaseKey, layout.toString());
   }
 
-  /// Carrega o layout base da personalização
   Future<GamepadLayoutType> getCustomLayoutBase() async {
     final prefs = await SharedPreferences.getInstance();
     final layoutString = prefs.getString(_customLayoutBaseKey);
@@ -59,12 +55,10 @@ class StorageService {
         orElse: () => GamepadLayoutType.xbox,
       );
     }
-    // Retorna Xbox como padrão se nenhum foi salvo
     return GamepadLayoutType.xbox;
   }
 
-  // --- Métodos de Configurações (bool) ---
-
+  // Métodos para configurações de funcionalidades
   Future<bool> isHapticFeedbackEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_hapticFeedbackEnabledKey) ?? true;
@@ -107,7 +101,6 @@ class StorageService {
 
   Future<bool> isExternalDigitalTriggersEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    // Default é 'false'
     return prefs.getBool(_externalDigitalTriggersKey) ?? false;
   }
 
@@ -116,47 +109,55 @@ class StorageService {
     await prefs.setBool(_externalDigitalTriggersKey, enabled);
   }
 
-
-  /// Salva a lista de configurações de layout como uma string JSON.
-  Future<void> saveCustomLayout(List<ButtonLayoutConfig> layout) async {
-    final prefs = await SharedPreferences.getInstance();
-    // 1. Converte a List<ButtonLayoutConfig> em List<Map<String, dynamic>>
-    final List<Map<String, dynamic>> jsonList =
-        layout.map((config) => config.toJson()).toList();
-    // 2. Codifica a lista em uma única string JSON
-    final String jsonString = jsonEncode(jsonList);
-    // 3. Salva a string
-    await prefs.setString(_customLayoutKey, jsonString);
+  // Método auxiliar para obter chave de armazenamento baseada no tipo de layout
+  String _getStorageKeyForLayout(GamepadLayoutType baseType) {
+    switch (baseType) {
+      case GamepadLayoutType.playstation:
+        return _customLayoutKey_PlayStation;
+      case GamepadLayoutType.nintendo:
+        return _customLayoutKey_Nintendo;
+      case GamepadLayoutType.xbox:
+      default:
+        return _customLayoutKey_Xbox;
+    }
   }
 
-  /// Carrega e decodifica o layout customizado do SharedPreferences.
-  /// Se nenhum layout salvo for encontrado, retorna o layout padrão.
-  Future<List<ButtonLayoutConfig>> loadCustomLayout() async {
+  // Métodos para gerenciamento de layouts customizados
+  Future<void> saveCustomLayout(List<ButtonLayoutConfig> layout, GamepadLayoutType baseType) async {
     final prefs = await SharedPreferences.getInstance();
-    final String? jsonString = prefs.getString(_customLayoutKey);
+    final String key = _getStorageKeyForLayout(baseType);
+    
+    final List<Map<String, dynamic>> jsonList =
+        layout.map((config) => config.toJson()).toList();
+    final String jsonString = jsonEncode(jsonList);
+    await prefs.setString(key, jsonString);
+  }
+
+  Future<List<ButtonLayoutConfig>> loadCustomLayout(GamepadLayoutType baseType) async {
+    final prefs = await SharedPreferences.getInstance();
+    final String key = _getStorageKeyForLayout(baseType);
+    final String? jsonString = prefs.getString(key);
 
     if (jsonString == null) {
       return List.from(defaultGamepadLayout);
     }
 
     try {
-      // 1. Decodifica a string em uma List<dynamic>
       final List<dynamic> jsonList = jsonDecode(jsonString);
-      // 2. Converte cada item da lista de volta para um ButtonLayoutConfig
       final List<ButtonLayoutConfig> layout = jsonList
           .map((jsonItem) =>
               ButtonLayoutConfig.fromJson(jsonItem as Map<String, dynamic>))
           .toList();
       return layout;
     } catch (e) {
-      print('Erro ao carregar layout customizado: $e');
+      print('Erro ao carregar layout customizado para $baseType: $e');
       return List.from(defaultGamepadLayout);
     }
   }
 
-  /// Reseta o layout para o padrão de fábrica
-  Future<void> resetLayoutToDefault() async {
+  Future<void> resetLayoutToDefault(GamepadLayoutType baseType) async {
      final prefs = await SharedPreferences.getInstance();
-     await prefs.remove(_customLayoutKey);
+     final String key = _getStorageKeyForLayout(baseType);
+     await prefs.remove(key);
   }
 }

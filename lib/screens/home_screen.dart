@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:gamepadvirtual/models/connection_state.dart' as models;
 import 'package:gamepadvirtual/screens/layout_selection_screen.dart';
-import 'package:gamepadvirtual/screens/gamepad_screen.dart'; // +++ ADICIONE ESTE IMPORT +++
+import 'package:gamepadvirtual/screens/gamepad_screen.dart';
 import 'package:gamepadvirtual/services/connection_service.dart';
 import 'package:gamepadvirtual/widgets/connection_status.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -28,8 +29,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _connectionState = _connectionService.currentState;
     });
   }
-  
+
+  // Diálogo de informações com link para download do servidor
   void _showInfoDialog() {
+    final Uri serverUrl = Uri.parse('https://github.com/KaleoNabor/GamePadVirtual-Desktop/releases/');
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -47,9 +51,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
                 InkWell(
-                  onTap: () {
-                    // Aqui você pode adicionar a lógica para abrir o link
-                    // Por exemplo: launchUrl(Uri.parse('https://github.com/seu-usuario/gamepad-virtual-server'));
+                  onTap: () async {
+                    if (await canLaunchUrl(serverUrl)) {
+                      await launchUrl(serverUrl, mode: LaunchMode.externalApplication);
+                    } else {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Não foi possível abrir o link.')),
+                        );
+                      }
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -62,10 +73,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       children: [
                         Icon(Icons.link, color: Theme.of(context).colorScheme.primary),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'https://github.com/seu-usuario/gamepad-virtual-server',
-                            style: TextStyle(
+                            serverUrl.toString(),
+                            style: const TextStyle(
                               color: Colors.blue,
                               decoration: TextDecoration.underline,
                               fontSize: 12,
@@ -104,6 +115,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  // Descoberta e conexão com servidores na rede local
   void _discoverAndShowServers() {
     _connectionService.discoverServers();
 
@@ -174,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
+  // Conexão via Bluetooth com verificação de permissões
   void _showBluetoothConnectionDialog() async {
     var scanPermission = await Permission.bluetoothScan.request();
     var connectPermission = await Permission.bluetoothConnect.request();
@@ -283,7 +296,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-
+  // Navegação para outras telas
   void _goToGamepad() {
     Navigator.push(
       context,
@@ -298,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-
+  // Interface principal da tela inicial
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -358,7 +371,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
             const SizedBox(height: 16),
 
-            // Botão Bluetooth - Substituído ListTile por ElevatedButton
             ElevatedButton.icon(
               icon: Icon(Icons.bluetooth, color: Theme.of(context).colorScheme.onPrimary),
               label: const Text('Conectar via Bluetooth'),
@@ -383,7 +395,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
             const SizedBox(height: 16),
 
-            // Botão Layout - Substituído ListTile por OutlinedButton
             OutlinedButton.icon(
               icon: const Icon(Icons.tune),
               label: const Text('Selecionar Layout do Controle'),
@@ -398,7 +409,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             
             const SizedBox(height: 16),
 
-            // Botão Ir para Controle - Com cor secundária
             ElevatedButton.icon(
               onPressed: _goToGamepad,
               icon: const Icon(Icons.sports_esports),

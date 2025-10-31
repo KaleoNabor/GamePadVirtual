@@ -23,6 +23,8 @@ dependencies:
   flutter:
     sdk: flutter
 
+  url_launcher: ^6.0.0
+
   # Desativa a otimização de bateria
   disable_battery_optimization: ^1.1.0
 
