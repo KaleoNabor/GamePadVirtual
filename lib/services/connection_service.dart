@@ -6,22 +6,16 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart' as ble;
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart' as classic;
 import 'package:gamepadvirtual/models/connection_state.dart';
 import 'package:gamepadvirtual/services/vibration_service.dart';
-// ADICIONE ESTE IMPORT
 import 'package:gamepadvirtual/models/gamepad_input_data.dart';
 
-// CLASSE REMOVIDA: GamepadInputData agora está em 'gamepad_input_data.dart'
-
-// Classe DiscoveredServer (sem alterações)
 class DiscoveredServer {
   final String name;
   final InternetAddress ipAddress;
   DiscoveredServer({required this.name, required this.ipAddress});
 }
 
-// ENUM CORRIGIDO: Renomeado para evitar conflito
 enum DiscoveredDeviceType { ble, classic }
 
-// CLASSE CORRIGIDA: Usa o novo nome do enum
 class DiscoveredBluetoothDevice {
   final String id;
   final String name;
@@ -63,47 +57,49 @@ class ConnectionService {
   factory ConnectionService() => _instance;
   ConnectionService._internal();
 
-  // --- UUIDs do nosso servidor C++ ---
+  // UUIDs do servidor BLE
   static final ble.Guid SERVICE_UUID = ble.Guid("00001812-0000-1000-8000-00805f9b34fb");
   static final ble.Guid INPUT_CHAR_UUID = ble.Guid("00002a4d-0000-1000-8000-00805f9b34fb");
   static final ble.Guid VIBRATION_CHAR_UUID = ble.Guid("1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d");
 
-  // --- Constantes e Canais ---
+  // Constantes e canais de comunicação
   static const MethodChannel _discoveryChannel = MethodChannel('com.example.gamepadvirtual/discovery');
   static const int dataPort = 27015;
 
-  // --- Controladores de Stream ---
+  // Controladores de stream para estado e mensagens
   final _connectionStateController = StreamController<ConnectionState>.broadcast();
+  final _systemMessageController = StreamController<String>.broadcast();
   final _discoveredServersController = StreamController<List<DiscoveredServer>>.broadcast();
   final _discoveredBleDevicesController = StreamController<List<DiscoveredBluetoothDevice>>.broadcast();
   final _unifiedBluetoothDevicesController = StreamController<List<DiscoveredBluetoothDevice>>.broadcast();
 
-  // --- Variáveis de Estado (Unificadas) ---
+  // Variáveis de estado e serviços
   ConnectionState _currentState = ConnectionState.disconnected();
   final VibrationService _vibrationService = VibrationService();
   
-  // Estado do UDP
+  // Estado da conexão UDP
   RawDatagramSocket? _udpSocket;
   InternetAddress? _serverAddress;
   final List<DiscoveredServer> _foundServers = [];
   
-  // Estado do BLE
+  // Estado da conexão BLE
   ble.BluetoothDevice? _connectedBleDevice;
   ble.BluetoothCharacteristic? _gamepadInputCharacteristic;
   ble.BluetoothCharacteristic? _vibrationOutputCharacteristic;
   StreamSubscription<List<ble.ScanResult>>? _scanSubscription;
 
-  // BLUETOOTH CLÁSSICO (REINTRODUZIDO)
+  // Estado da conexão Bluetooth clássico
   classic.BluetoothConnection? _classicBluetoothConnection;
 
-  // --- Streams Públicas ---
+  // Streams públicas para consumo externo
   Stream<ConnectionState> get connectionStateStream => _connectionStateController.stream;
+  Stream<String> get systemMessageStream => _systemMessageController.stream;
   Stream<List<DiscoveredServer>> get discoveredServersStream => _discoveredServersController.stream;
   Stream<List<DiscoveredBluetoothDevice>> get discoveredBleDevicesStream => _discoveredBleDevicesController.stream;
   Stream<List<DiscoveredBluetoothDevice>> get unifiedBluetoothDevicesStream => _unifiedBluetoothDevicesController.stream;
   ConnectionState get currentState => _currentState;
 
-  // --- Lógica de Descoberta Wi-Fi (sem alterações) ---
+  // Descoberta de servidores na rede Wi-Fi
   Future<void> discoverServers() async {
     _foundServers.clear();
     _discoveredServersController.add(_foundServers);
@@ -133,7 +129,7 @@ class ConnectionService {
     _discoveryChannel.setMethodCallHandler(null);
   }
 
-  // --- CONEXÃO UDP ---
+  // Conexão via UDP para servidores Wi-Fi
   Future<bool> connectToServer(DiscoveredServer server) async {
     await _disconnectCurrent(updateState: false);
     try {
@@ -151,13 +147,10 @@ class ConnectionService {
     }
   }
 
-  // =======================================================================
-  // NOVA FUNÇÃO PRINCIPAL DE DESCOBERTA UNIFICADA
-  // =======================================================================
+  // Descoberta unificada de dispositivos Bluetooth
   void discoverAllBluetoothDevices() {
     final foundDevices = <String, DiscoveredBluetoothDevice>{};
 
-    // 1. Inicia o scan BLE
     ble.FlutterBluePlus.startScan(timeout: const Duration(seconds: 5));
     ble.FlutterBluePlus.scanResults.listen((results) {
       for (var r in results) {
@@ -169,7 +162,6 @@ class ConnectionService {
       _unifiedBluetoothDevicesController.add(foundDevices.values.toList());
     });
 
-    // 2. Busca os dispositivos pareados
     getPairedDevices().then((pairedDevices) {
       for (var device in pairedDevices) {
         if (!foundDevices.containsKey(device.address)) {
@@ -184,9 +176,7 @@ class ConnectionService {
     ble.FlutterBluePlus.stopScan();
   }
 
-  // =======================================================================
-  // FUNÇÃO CORRIGIDA: CONEXÃO "INTELIGENTE"
-  // =======================================================================
+  // Conexão inteligente baseada no tipo de dispositivo
   Future<bool> connectToBluetoothDevice(DiscoveredBluetoothDevice device) {
     if (device.type == DiscoveredDeviceType.ble) {
       return connectToBleDevice(device.underlyingDevice as ble.BluetoothDevice);
@@ -195,9 +185,7 @@ class ConnectionService {
     }
   }
 
-  // =======================================================================
-  // LÓGICA: BLUETOOTH LOW ENERGY (ATUALIZADA)
-  // =======================================================================
+  // Descoberta específica de dispositivos BLE
   void scanForBleDevices() {
     final List<DiscoveredBluetoothDevice> foundDevices = [];
     
@@ -218,6 +206,7 @@ class ConnectionService {
     _scanSubscription?.cancel();
   }
 
+  // Conexão com dispositivos BLE
   Future<bool> connectToBleDevice(ble.BluetoothDevice device) async {
     await _disconnectCurrent(updateState: false);
 
@@ -241,23 +230,7 @@ class ConnectionService {
       if (_gamepadInputCharacteristic != null && _vibrationOutputCharacteristic != null) {
         await _vibrationOutputCharacteristic!.setNotifyValue(true);
         _vibrationOutputCharacteristic!.onValueReceived.listen((value) {
-          try {
-            final message = utf8.decode(value);
-            final json = jsonDecode(message);
-            if (json['type'] == 'vibration') {
-              final List<dynamic> patternDyn = json['pattern'];
-              final List<int> pattern = patternDyn.map((e) => e as int).toList();
-              
-              // --- CORREÇÃO AQUI ---
-              List<int>? amplitudes;
-              if (json['amplitudes'] != null) {
-                final List<dynamic> amplitudesDyn = json['amplitudes'];
-                amplitudes = amplitudesDyn.map((e) => e as int).toList();
-              }
-              
-              _vibrationService.vibratePatternFromGame(pattern, amplitudes: amplitudes);
-            }
-          } catch(e) { /* Ignora dados inválidos */ }
+          _handleReceivedData(value);
         });
 
         _updateConnectionState(ConnectionState.bluetoothLeConnected(
@@ -274,9 +247,7 @@ class ConnectionService {
     return false;
   }
 
-  // =======================================================================
-  // LÓGICA REINTRODUZIDA: BLUETOOTH CLÁSSICO
-  // =======================================================================
+  // Obtenção de dispositivos Bluetooth pareados
   Future<List<classic.BluetoothDevice>> getPairedDevices() async {
     try {
       return await classic.FlutterBluetoothSerial.instance.getBondedDevices();
@@ -286,27 +257,14 @@ class ConnectionService {
     }
   }
 
+  // Conexão com dispositivos Bluetooth clássico
   Future<bool> connectToClassicBluetooth(classic.BluetoothDevice device) async {
     await _disconnectCurrent(updateState: false);
     try {
       _classicBluetoothConnection = await classic.BluetoothConnection.toAddress(device.address);
       
       _classicBluetoothConnection!.input!.listen((data) {
-          try {
-            final message = utf8.decode(data);
-            final json = jsonDecode(message);
-            if (json['type'] == 'vibration') {
-              final pattern = List<int>.from(json['pattern']);
-              
-              // --- CORREÇÃO AQUI ---
-              List<int>? amplitudes;
-              if (json['amplitudes'] != null) {
-                amplitudes = List<int>.from(json['amplitudes']);
-              }
-              
-              _vibrationService.vibratePatternFromGame(pattern, amplitudes: amplitudes);
-            }
-          } catch (e) { /* Ignora pacotes não-JSON */ }
+        _handleReceivedData(data);
       }, onDone: disconnect);
       
       _updateConnectionState(ConnectionState.bluetoothClassicConnected(
@@ -321,7 +279,31 @@ class ConnectionService {
     }
   }
 
-  // --- Lógica de Envio de Dados (UNIFICADA) ---
+  // Processamento de dados recebidos dos servidores
+  void _handleReceivedData(List<int> data) {
+    try {
+      final message = utf8.decode(data);
+      final json = jsonDecode(message);
+      if (json['type'] == 'vibration') {
+        final List<dynamic> patternDyn = json['pattern'];
+        final List<int> pattern = patternDyn.map((e) => e as int).toList();
+        
+        List<int>? amplitudes;
+        if (json['amplitudes'] != null) {
+          final List<dynamic> amplitudesDyn = json['amplitudes'];
+          amplitudes = amplitudesDyn.map((e) => e as int).toList();
+        }
+        
+        _vibrationService.vibratePatternFromGame(pattern, amplitudes: amplitudes);
+      } else if (json['type'] == 'system' && json['code'] == 'server_full') {
+        _systemMessageController.add('server_full');
+      }
+    } catch (e) {
+      // Ignora pacotes com dados inválidos
+    }
+  }
+
+  // Envio de dados do gamepad para o servidor
   void sendGamepadData(GamepadInputData data) {
     if (!_currentState.isConnected) return;
     try {
@@ -341,36 +323,18 @@ class ConnectionService {
     }
   }
 
-  // --- Lógica para Ouvir Comandos de Vibração ---
+  // Escuta de comandos de vibração via UDP
   void _listenForVibration(RawDatagramSocket socket) {
     socket.listen((RawSocketEvent event) {
       if (event == RawSocketEvent.read) {
         Datagram? datagram = socket.receive();
         if (datagram == null) return;
-        
-        try {
-          final message = utf8.decode(datagram.data);
-          final json = jsonDecode(message);
-          if (json['type'] == 'vibration') {
-            final List<dynamic> patternDyn = json['pattern'];
-            final List<int> pattern = patternDyn.map((e) => e as int).toList();
-            
-            // --- CORREÇÃO AQUI ---
-            List<int>? amplitudes;
-            if (json['amplitudes'] != null) {
-              final List<dynamic> amplitudesDyn = json['amplitudes'];
-              amplitudes = amplitudesDyn.map((e) => e as int).toList();
-            }
-            
-            _vibrationService.vibratePatternFromGame(pattern, amplitudes: amplitudes);
-          }
-        } catch (e) {
-          // Ignora pacotes que não são JSON
-        }
+        _handleReceivedData(datagram.data);
       }
     });
   }
   
+  // Envio de sinal de desconexão para o servidor
   Future<void> sendDisconnectSignal() async {
     final disconnectMessage = utf8.encode("DISCONNECT_GPV_PLAYER");
 
@@ -389,26 +353,24 @@ class ConnectionService {
     }
   }
 
-  // --- Lógica de Desconexão (UNIFICADA) ---
+  // Desconexão de todas as conexões ativas
   Future<void> disconnect() async {
     await _disconnectCurrent();
   }
 
+  // Limpeza interna de conexões
   Future<void> _disconnectCurrent({bool updateState = true}) async {
-    // UDP
     _udpSocket?.close();
     _udpSocket = null;
     _serverAddress = null;
     stopDiscovery();
     
-    // BLE
     await _connectedBleDevice?.disconnect();
     _connectedBleDevice = null;
     _gamepadInputCharacteristic = null;
     _vibrationOutputCharacteristic = null;
     stopBleScan();
     
-    // BLUETOOTH CLÁSSICO
     _classicBluetoothConnection?.close();
     _classicBluetoothConnection = null;
 
@@ -417,6 +379,7 @@ class ConnectionService {
     }
   }
 
+  // Atualização do estado de conexão
   void _updateConnectionState(ConnectionState newState) {
     if (_currentState == newState) return;
     _currentState = newState;
@@ -425,14 +388,15 @@ class ConnectionService {
     }
   }
   
+  // Liberação de recursos
   void dispose() {
-    // Envia o sinal de desconexão ANTES de fechar os sockets
     if (_currentState.isConnected) {
       sendDisconnectSignal();
     }
     
     _disconnectCurrent();
     _connectionStateController.close();
+    _systemMessageController.close();
     _discoveredServersController.close();
     _discoveredBleDevicesController.close();
     _unifiedBluetoothDevicesController.close();

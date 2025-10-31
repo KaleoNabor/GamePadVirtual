@@ -25,9 +25,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _connectionService.connectionStateStream.listen((state) {
       if (mounted) setState(() => _connectionState = state);
     });
+    _connectionService.systemMessageStream.listen(_handleSystemMessage);
     setState(() {
       _connectionState = _connectionService.currentState;
     });
+  }
+
+  // Processamento de mensagens do sistema recebidas do servidor
+  void _handleSystemMessage(String code) {
+    if (code == 'server_full' && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Falha ao conectar: O servidor está cheio (Máx 8 jogadores).'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
   }
 
   // Diálogo de informações com link para download do servidor
