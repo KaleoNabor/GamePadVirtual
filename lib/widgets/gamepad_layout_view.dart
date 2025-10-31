@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:gamepadvirtual/models/button_layout_config.dart';
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
 import 'package:gamepadvirtual/services/gamepad_state_service.dart';
-// +++ ADICIONE ESTE IMPORT +++
-import 'package:gamepadvirtual/core/default_layout.dart'; 
+import 'package:gamepadvirtual/core/default_layout.dart';
 import 'package:gamepadvirtual/services/storage_service.dart';
 import 'package:gamepadvirtual/services/vibration_service.dart';
 import 'package:gamepadvirtual/widgets/analog_stick.dart';
@@ -17,7 +16,6 @@ class GamepadLayoutView extends StatefulWidget {
   final GamepadLayout layout;
   final bool hapticFeedbackEnabled;
   final GamepadLayoutType layoutType;
-  // +++ ADICIONE ESTA LINHA +++
   final VoidCallback onShowSettings; 
 
   const GamepadLayoutView({
@@ -28,7 +26,6 @@ class GamepadLayoutView extends StatefulWidget {
     required this.layout,
     required this.hapticFeedbackEnabled,
     required this.layoutType,
-    // +++ ADICIONE ESTA LINHA +++
     required this.onShowSettings,
   });
 
@@ -45,9 +42,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     _loadLayout();
   }
 
-  // +++ ADICIONE ESTA FUNÇÃO +++
-  // Detecta se a seleção de layout mudou (ex: de Xbox para PS)
-  // e força o recarregamento do layout
   @override
   void didUpdateWidget(covariant GamepadLayoutView oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -56,16 +50,13 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     }
   }
 
-  /// Carrega o layout customizado OU o padrão, dependendo da seleção
+  // Carrega layout personalizado ou padrão conforme seleção
   Future<void> _loadLayout() async {
-    // +++ SUBSTITUA ESTA LÓGICA +++
     List<ButtonLayoutConfig> loadedLayout;
 
     if (widget.layoutType == GamepadLayoutType.custom) {
-      // Se a seleção for "Personalizado", carrega do storage
       loadedLayout = await widget.storageService.loadCustomLayout();
     } else {
-      // Se for Xbox, PS, etc., usa o layout padrão
       loadedLayout = defaultGamepadLayout;
     }
 
@@ -76,56 +67,54 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     }
   }
 
-  // --- Funções de callback (agora acessam 'widget.gamepadState') ---
+  // Atualiza estado quando botão é pressionado
   void _onButtonPressed(ButtonType buttonType) {
     widget.gamepadState.onButtonPressed(buttonType);
     if (widget.hapticFeedbackEnabled) widget.vibrationService.vibrateForButton();
   }
 
+  // Atualiza estado quando botão é liberado
   void _onButtonReleased(ButtonType buttonType) {
     widget.gamepadState.onButtonReleased(buttonType);
   }
 
+  // Processa movimento dos analógicos
+  void _onAnalogStickChanged(bool isLeft, double x, double y) {
+    widget.gamepadState.onAnalogStickChanged(isLeft, x, y);
+  }
+
   @override
   Widget build(BuildContext context) {
-    // +++ ADICIONE ESTA LINHA PARA OBTER O TAMANHO DA TELA +++
     final Size screenSize = MediaQuery.of(context).size;
 
-    // Escuta as mudanças de estado (botões pressionados, etc.)
     return AnimatedBuilder(
       animation: widget.gamepadState,
       builder: (context, child) {
-        // Se o layout ainda não carregou, mostra um spinner
         if (_layoutConfig == null) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        // O layout carregou, constrói a UI dinamicamente
         return Stack(
           children: _layoutConfig!
-              .where((config) => config.isVisible) // Apenas botões visíveis
-              // +++ PASSE O screenSize PARA O MÉTODO DE BUILD +++
-              .map((config) => _buildPositionedElement(config, screenSize)) // Constrói cada elemento
+              .where((config) => config.isVisible)
+              .map((config) => _buildPositionedElement(config, screenSize))
               .toList(),
         );
       },
     );
   }
 
-  // +++ ATUALIZE A ASSINATURA DESTA FUNÇÃO +++
-  /// Constrói um único elemento do gamepad (botão, analógico, etc.)
-  /// e o envolve em um [Positioned] com as coordenadas do config.
+  // Constrói elemento posicionado baseado na configuração
   Widget _buildPositionedElement(ButtonLayoutConfig config, Size screenSize) {
     Widget child;
 
-    // Decide qual widget construir com base no tipo de elemento
     switch (config.element) {
       case ConfigurableElement.analogLeft:
         child = AnalogStick(
-          size: config.width, // Usa o tamanho do config
+          size: config.width,
           label: 'L',
           isLeft: true,
-          onChanged: (x, y) => widget.gamepadState.onAnalogStickChanged(true, x, y),
+          onChanged: (x, y) => _onAnalogStickChanged(true, x, y),
         );
         break;
       case ConfigurableElement.analogRight:
@@ -133,7 +122,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
           size: config.width,
           label: 'R',
           isLeft: false,
-          onChanged: (x, y) => widget.gamepadState.onAnalogStickChanged(false, x, y),
+          onChanged: (x, y) => _onAnalogStickChanged(false, x, y),
         );
         break;
       case ConfigurableElement.dpad:
@@ -166,8 +155,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
       case ConfigurableElement.start:
         child = _buildSystemButton('START', ButtonType.start, config);
         break;
-
-      // +++ ADICIONE ESTE NOVO CASE +++
       case ConfigurableElement.floatingSettingsButton:
         child = FloatingActionButton(
           onPressed: widget.onShowSettings,
@@ -176,26 +163,21 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
         break;
     }
 
-    // Retorna o widget posicionado na tela
     return Positioned(
-      // +++ MULTIPLIQUE AS COORDENADAS RELATIVAS PELO TAMANHO DA TELA +++
       left: config.x * screenSize.width,
       top: config.y * screenSize.height,
       child: child,
     );
   }
 
-  // --- Métodos de Build de Widgets (Modificados) ---
-  // Eles não usam mais 'Positioned' e agora recebem 'ButtonLayoutConfig'
-  // para saberem seus tamanhos.
-
+  // Calcula cor do texto baseada no fundo
   Color _getTextColor(Color backgroundColor) {
     return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
   }
 
+  // Constrói D-Pad com 4 direções
   Widget _buildDPad(ButtonLayoutConfig config) {
-    // Os botões internos do DPad são posicionados *dentro* do SizedBox
-    final buttonSize = config.width / 3; // Tamanho de um botão (ex: 120 / 3 = 40)
+    final buttonSize = config.width / 3;
     
     return SizedBox(
       width: config.width,
@@ -211,9 +193,10 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
+  // Constrói botões de ação (A, B, X, Y)
   Widget _buildActionButtons(ButtonLayoutConfig config) {
     final buttons = widget.layout.buttons;
-    final buttonSize = config.width / 3; // ex: 44
+    final buttonSize = config.width / 3;
     
     return SizedBox(
       width: config.width,
@@ -229,6 +212,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
+  // Constrói botão do gamepad com feedback visual
   Widget _buildGamepadButton(GamepadButton button, double size) {
     final isPressed = widget.gamepadState.buttonStates[button.type] ?? false;
     return GestureDetector(
@@ -257,7 +241,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
             style: TextStyle(
               color: _getTextColor(Color(button.color)),
               fontWeight: FontWeight.bold,
-              fontSize: size * 0.4 // Fonte dinâmica
+              fontSize: size * 0.4
             )
           ),
         ),
@@ -265,6 +249,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
   
+  // Constrói botão direcional individual
   Widget _buildDirectionalButton(IconData icon, ButtonType buttonType, double size) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
@@ -284,6 +269,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
+  // Constrói botão de ombro (L1/R1)
   Widget _buildShoulderButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
@@ -312,6 +298,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
+  // Constrói botão de gatilho (L2/R2)
   Widget _buildTriggerButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
@@ -340,6 +327,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
+  // Constrói botão do analógico (L3/R3)
   Widget _buildStickButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
@@ -368,6 +356,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
+  // Constrói botão do sistema (SELECT/START)
   Widget _buildSystemButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(

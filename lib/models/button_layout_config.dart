@@ -1,6 +1,7 @@
 // lib/models/button_layout_config.dart
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
 
+// Enumeração de todos os elementos da interface do gamepad que podem ser configurados.
 // Mapeia todos os widgets controláveis na tela
 enum ConfigurableElement {
   analogLeft,
@@ -18,6 +19,7 @@ enum ConfigurableElement {
   floatingSettingsButton, // +++ ADICIONE ESTA LINHA +++
 }
 
+// Representa a configuração de layout de um único elemento da interface do gamepad.
 class ButtonLayoutConfig {
   final ConfigurableElement element;
   final double x;

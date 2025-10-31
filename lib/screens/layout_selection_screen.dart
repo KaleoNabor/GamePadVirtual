@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
 import 'package:gamepadvirtual/services/storage_service.dart';
-// +++ ADICIONE ESTE IMPORT +++
 import 'package:gamepadvirtual/screens/layout_customization_screen.dart';
 
 class LayoutSelectionScreen extends StatefulWidget {
@@ -111,12 +110,12 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
   }
 
   Widget _buildLayoutOption({
-    required GamepadLayout? layout, // <<< TORNE O LAYOUT NULÁVEL
+    required GamepadLayout? layout, 
     required GamepadLayoutType layoutType,
     required String description,
   }) {
     final isSelected = _selectedLayout == layoutType;
-    final String title = layout?.name ?? 'Personalizado'; // <<< DÊ UM TÍTULO
+    final String title = layout?.name ?? 'Personalizado'; 
 
     return Card(
       elevation: isSelected ? 8 : 2,
@@ -148,7 +147,6 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
                   Radio<GamepadLayoutType>(
                     value: layoutType,
                     groupValue: _selectedLayout,
-                    // --- MODIFIQUE A LÓGICA DO 'onChanged' ---
                     onChanged: (value) {
                       if (value != null) {
                         if (value == GamepadLayoutType.custom) {

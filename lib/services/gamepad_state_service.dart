@@ -97,13 +97,29 @@ class GamepadStateService with ChangeNotifier {
     notifyListeners();
   }
 
-  void updateAnalogsFromExternal(Map<String, double> analogData) {
+  void updateAnalogsFromExternal(Map<String, double> analogData, {required bool digitalTriggersEnabled}) {
     leftStickX = analogData['leftX'] ?? leftStickX;
     leftStickY = analogData['leftY'] ?? leftStickY;
     rightStickX = analogData['rightX'] ?? rightStickX;
     rightStickY = analogData['rightY'] ?? rightStickY;
-    leftTriggerValue = analogData['leftTrigger'] ?? leftTriggerValue;
-    rightTriggerValue = analogData['rightTrigger'] ?? rightTriggerValue;
+
+    // --- APLICA A LÓGICA DIGITAL AQUI ---
+    double rawL2 = analogData['leftTrigger'] ?? leftTriggerValue;
+    double rawR2 = analogData['rightTrigger'] ?? rightTriggerValue;
+    
+    // Define um "deadzone" de 10%
+    const double digitalThreshold = 0.1; 
+
+    if (digitalTriggersEnabled) {
+      // Se digital, qualquer pressão > 10% vira 100%
+      leftTriggerValue = (rawL2 > digitalThreshold) ? 1.0 : 0.0;
+      rightTriggerValue = (rawR2 > digitalThreshold) ? 1.0 : 0.0;
+    } else {
+      // Senão, usa o valor analógico normal
+      leftTriggerValue = rawL2;
+      rightTriggerValue = rawR2;
+    }
+    // --- FIM DA LÓGICA ---
     
     final dpadX = analogData['dpadX'] ?? 0.0;
     final dpadY = analogData['dpadY'] ?? 0.0;

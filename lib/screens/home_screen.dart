@@ -28,17 +28,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _connectionState = _connectionService.currentState;
     });
   }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.detached) {
-      if (_connectionState.isConnected) {
-        _connectionService.sendDisconnectSignal();
-      }
-    }
-  }
-
+  
   void _showInfoDialog() {
     showDialog(
       context: context,
@@ -293,15 +283,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  // +++ REMOVIDA: Função não utilizada +++
-  // void _listAndConnectPairedDevices() async {
-  //   // ... código removido
-  // }
-
-  // +++ REMOVIDA: Função não utilizada +++
-  // void _scanAndShowBleDevices() async {
-  //   // ... código removido
-  // }
 
   void _goToGamepad() {
     Navigator.push(
@@ -317,13 +298,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // --- REMOVA ESTA FUNÇÃO INTEIRA ---
-  // void _goToLayoutCustomization() {
-  //   Navigator.push(
-  //     context,
-  //     MaterialPageRoute(builder: (context) => const LayoutCustomizationScreen()),
-  //   );
-  // }
 
   @override
   Widget build(BuildContext context) {

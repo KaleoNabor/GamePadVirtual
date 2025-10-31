@@ -2,7 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // <<< VERIFIQUE SE ESTE IMPORT ESTÁ AQUI
+import 'package:flutter/services.dart';
 import 'package:gamepadvirtual/models/connection_state.dart' as models;
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
 import 'package:gamepadvirtual/services/connection_service.dart';
@@ -13,7 +13,7 @@ import 'package:gamepadvirtual/services/gamepad_input_service.dart';
 import 'package:gamepadvirtual/widgets/connection_status.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:gamepadvirtual/services/gamepad_state_service.dart';
-import 'package:gamepadvirtual/widgets/gamepad_layout_view.dart'; // <<< VERIFIQUE ESTE IMPORT
+import 'package:gamepadvirtual/widgets/gamepad_layout_view.dart';
 
 class GamepadScreen extends StatefulWidget {
   const GamepadScreen({super.key});
@@ -23,34 +23,34 @@ class GamepadScreen extends StatefulWidget {
 }
 
 class _GamepadScreenState extends State<GamepadScreen> {
-  // SERVICES
+  //region Serviços
+  /// Instâncias dos serviços utilizados pela tela para gerenciar estado, conexões e hardware.
   final ConnectionService _connectionService = ConnectionService();
   final StorageService _storageService = StorageService();
   final VibrationService _vibrationService = VibrationService();
   final SensorService _sensorService = SensorService();
   final GamepadInputService _gamepadInputService = GamepadInputService();
-
-  // +++ ADICIONE O NOVO SERVIÇO DE ESTADO ("CÉREBRO") +++
   final GamepadStateService _gamepadState = GamepadStateService();
+  //endregion
 
-  // STATE
+  //region Estado da Tela
+  /// Variáveis que controlam o estado da interface, como status de conexão e layout.
   models.ConnectionState _connectionState = models.ConnectionState.disconnected();
   models.ConnectionState _externalGamepadState = models.ConnectionState.disconnected();
   GamepadLayout _predefinedLayout = GamepadLayout.xbox;
   bool _isLoading = true;
-
-  // +++ ADICIONE ESTA LINHA +++
-  // Armazena a seleção de layout do usuário (xbox, custom, etc.)
   GamepadLayoutType _selectedLayoutType = GamepadLayoutType.xbox;
-  
-  // SETTINGS STATE
   bool _hapticFeedbackEnabled = true;
   bool _gyroscopeEnabled = true;
   bool _accelerometerEnabled = true;
   bool _rumbleEnabled = true;
-
+  bool _externalDigitalTriggersEnabled = false;
   Timer? _gameLoopTimer;
+  //endregion
 
+  //region Mapeamento de Botões Externos
+  /// Mapeia os botões de um gamepad físico para os tipos de botões internos do app,
+  /// adaptando-se ao layout selecionado (Xbox, PlayStation, etc.).
   Map<String, ButtonType> get _externalGamepadMapping {
     switch (_predefinedLayout.type) {
       case GamepadLayoutType.playstation:
@@ -79,21 +79,38 @@ class _GamepadScreenState extends State<GamepadScreen> {
         };
     }
   }
+  //endregion
+
+  //region Ciclo de Vida do Widget
 
   @override
   void initState() {
     super.initState();
     _initializeGamepad();
-    
-    // +++ MODO TELA CHEIA IMERSIVA (FIX 1) +++
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
+
+  @override
+  void dispose() {
+    _gameLoopTimer?.cancel();
+    _sensorService.stopAllSensors();
+    _unlockOrientation();
+    WakelockPlus.disable();
+    _gamepadState.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+  //endregion
+
+  //region Inicialização e Game Loop
+  /// Métodos responsáveis por configurar a tela, iniciar o loop de envio de dados
+  /// e gerenciar os sensores.
 
   Future<void> _initializeGamepad() async {
     await _gamepadInputService.initialize();
     _lockToLandscape();
     WakelockPlus.enable();
-    _gamepadState.initialize(); // +++ ADICIONE ISSO +++
+    _gamepadState.initialize();
     await _loadSettingsAndLayout();
 
     _gamepadInputService.connectionStream.listen((state) {
@@ -120,7 +137,7 @@ class _GamepadScreenState extends State<GamepadScreen> {
     _gameLoopTimer = Timer.periodic(const Duration(milliseconds: 8), (timer) {
       if (_connectionService.currentState.isConnected && (_gamepadState.hasNewInput || _gyroscopeEnabled || _accelerometerEnabled)) {
         _sendGamepadData();
-        _gamepadState.clearInputFlag(); // +++ ADICIONE ISSO +++
+        _gamepadState.clearInputFlag();
       }
     });
   }
@@ -132,30 +149,15 @@ class _GamepadScreenState extends State<GamepadScreen> {
   void _updateAccelState(SensorData accelData) {
     _gamepadState.updateAccelState(accelData, _accelerometerEnabled);
   }
-  
-  @override
-  void dispose() {
-    _gameLoopTimer?.cancel();
-    _sensorService.stopAllSensors();
-    _unlockOrientation();
-    WakelockPlus.disable();
-    _gamepadState.dispose(); // +++ ADICIONE ISSO +++
-    
-    // +++ RESTAURA A UI DO SISTEMA AO SAIR +++
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-    super.dispose();
-  }
-  
   void _sendGamepadData() {
     final data = _gamepadState.getGamepadInputData();
     _connectionService.sendGamepadData(data);
   }
+  //endregion
 
-  // ======================================================================
-  // --- FUNÇÕES DE TOGGLE QUE VINCULAM AS CHAVES À LÓGICA ---
-  // ======================================================================
-
+  //region Funções de Configuração (Toggles)
+  /// Métodos para ativar/desativar funcionalidades e persistir a escolha no armazenamento.
   Future<void> _toggleHapticFeedback(bool enabled) async { 
     await _storageService.setHapticFeedbackEnabled(enabled); 
     setState(() => _hapticFeedbackEnabled = enabled); 
@@ -172,7 +174,6 @@ class _GamepadScreenState extends State<GamepadScreen> {
     if(enabled) { _sensorService.startGyroscope(); } 
     else { 
       _sensorService.stopGyroscope(); 
-      // CORREÇÃO APLICADA:
       _gamepadState.updateGyroState(SensorData(x:0, y:0, z:0, timestamp: DateTime.now()), false);
     } 
   }
@@ -183,10 +184,17 @@ class _GamepadScreenState extends State<GamepadScreen> {
     if(enabled) { _sensorService.startAccelerometer(); } 
     else { 
       _sensorService.stopAccelerometer(); 
-      // CORREÇÃO APLICADA:
       _gamepadState.updateAccelState(SensorData(x:0, y:0, z:0, timestamp: DateTime.now()), false);
     } 
   }
+
+  Future<void> _toggleExternalDigitalTriggers(bool enabled) async { 
+    await _storageService.setExternalDigitalTriggersEnabled(enabled); 
+    setState(() => _externalDigitalTriggersEnabled = enabled); 
+  }
+  //endregion
+
+  //region Construção da UI
 
   @override
   Widget build(BuildContext context) {
@@ -194,15 +202,7 @@ class _GamepadScreenState extends State<GamepadScreen> {
     
     return Scaffold(
       backgroundColor: isExternalMode ? Colors.black : Theme.of(context).colorScheme.surface,
-      
-      // --- REMOVA O FLOATING ACTION BUTTON DAQUI ---
-      // floatingActionButton: FloatingActionButton(
-      //   onPressed: _showSettingsPanel,
-      //   child: const Icon(Icons.settings),
-      // ),
-      
       body: SafeArea(
-        // +++ DESATIVE A SAFEAREA (A TELA CHEIA JÁ CUIDA DISSO) +++
         top: false,
         bottom: false,
         left: false,
@@ -217,6 +217,9 @@ class _GamepadScreenState extends State<GamepadScreen> {
   }
 
   void _showSettingsPanel() {
+    /// Determina se o modo de gamepad externo está ativo para customizar o painel.
+    final bool isExternalMode = _externalGamepadState.isConnected && _externalGamepadState.isExternalGamepad;
+
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -229,15 +232,17 @@ class _GamepadScreenState extends State<GamepadScreen> {
                 children: [
                   Text('Configurações', style: Theme.of(context).textTheme.headlineSmall),
                   const Divider(),
-                  SwitchListTile(
-                    title: const Text('Resposta Tátil'),
-                    subtitle: const Text('Vibra ao tocar nos botões virtuais.'),
-                    value: _hapticFeedbackEnabled,
-                    onChanged: (value) {
-                      _toggleHapticFeedback(value);
-                      setModalState(() {});
-                    },
-                  ),
+                  /// Só mostra a opção de "Resposta Tátil" se não estiver em modo de gamepad externo.
+                  if (!isExternalMode)
+                    SwitchListTile(
+                      title: const Text('Resposta Tátil'),
+                      subtitle: const Text('Vibra ao tocar nos botões virtuais.'),
+                      value: _hapticFeedbackEnabled,
+                      onChanged: (value) {
+                        _toggleHapticFeedback(value);
+                        setModalState(() {});
+                      },
+                    ),
                   SwitchListTile(
                     title: const Text('Vibração do Jogo (Rumble)'),
                     subtitle: const Text('Recebe e reproduz a vibração enviada pelo jogo.'),
@@ -265,6 +270,18 @@ class _GamepadScreenState extends State<GamepadScreen> {
                       setModalState(() {});
                     },
                   ),
+                  const Divider(),
+                  /// Mostra a opção de gatilhos digitais apenas quando um gamepad externo está conectado.
+                  if (isExternalMode)
+                    SwitchListTile(
+                      title: const Text('Gatilhos Digitais (Externo)'),
+                      subtitle: const Text('Qualquer pressão ( > 10%) ativa 100% do gatilho.'),
+                      value: _externalDigitalTriggersEnabled,
+                      onChanged: (value) {
+                        _toggleExternalDigitalTriggers(value);
+                        setModalState(() {});
+                      },
+                    ),
                 ],
               ),
             );
@@ -273,7 +290,10 @@ class _GamepadScreenState extends State<GamepadScreen> {
       },
     );
   }
-  
+  //endregion
+
+  //region Manipulação de Entradas
+  /// Processa os dados recebidos de um gamepad físico externo.
   void _onExternalGamepadInput(Map<String, dynamic> input) {
     try {
       if (input.containsKey('buttons')) {
@@ -284,23 +304,26 @@ class _GamepadScreenState extends State<GamepadScreen> {
       }
       if (input.containsKey('analog')) {
         _gamepadState.updateAnalogsFromExternal(
-          Map<String, double>.from(input['analog'])
+          Map<String, double>.from(input['analog']),
+          digitalTriggersEnabled: _externalDigitalTriggersEnabled,
         );
       }
     } catch (e) {
       print('Error processing external gamepad input: $e');
     }
   }
+  //endregion
 
+  //region Carregamento de Configurações
+  /// Carrega as configurações salvas e o layout do controle ao iniciar a tela.
   Future<void> _loadSettingsAndLayout() async {
     _hapticFeedbackEnabled = await _storageService.isHapticFeedbackEnabled();
     _gyroscopeEnabled = await _storageService.isGyroscopeEnabled();
     _accelerometerEnabled = await _storageService.isAccelerometerEnabled();
     _rumbleEnabled = await _storageService.isRumbleEnabled();
+    _externalDigitalTriggersEnabled = await _storageService.isExternalDigitalTriggersEnabled();
     
-    // +++ MODIFIQUE ESTA PARTE +++
     final layoutType = await _storageService.getSelectedLayout();
-    // Salva a seleção para podermos passá-la para o GamepadLayoutView
     _selectedLayoutType = layoutType; 
 
     if (layoutType == GamepadLayoutType.custom) {
@@ -319,11 +342,16 @@ class _GamepadScreenState extends State<GamepadScreen> {
     if (_gyroscopeEnabled) await _sensorService.startGyroscope();
     if (_accelerometerEnabled) await _sensorService.startAccelerometer();
   }
+  //endregion
 
+  //region Utilitários de Orientação
   void _lockToLandscape() => SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
   void _unlockOrientation() => SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+  //endregion
 
+  //region Widgets da Tela
   Widget _buildExternalGamepadView() {
+    /// Constrói a interface para o modo de gamepad externo, que é mais informativa.
     return Stack(
       children: [
         Positioned(
@@ -335,6 +363,18 @@ class _GamepadScreenState extends State<GamepadScreen> {
               Navigator.pop(context); 
             },
             icon: const Icon(Icons.arrow_back),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black.withAlpha(200),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+        Positioned(
+          top: 10,
+          right: 10,
+          child: IconButton(
+            onPressed: _showSettingsPanel,
+            icon: const Icon(Icons.settings),
             style: IconButton.styleFrom(
               backgroundColor: Colors.black.withAlpha(200),
               foregroundColor: Colors.white,
@@ -387,9 +427,9 @@ class _GamepadScreenState extends State<GamepadScreen> {
   }
 
   Widget _buildPredefinedGamepadView() {
+    /// Constrói a interface do gamepad virtual padrão.
     return Stack(
       children: [
-        // 1. O Layout do Gamepad (o "corpo" modular)
         GamepadLayoutView(
           gamepadState: _gamepadState,
           vibrationService: _vibrationService,
@@ -397,12 +437,8 @@ class _GamepadScreenState extends State<GamepadScreen> {
           layout: _predefinedLayout,
           hapticFeedbackEnabled: _hapticFeedbackEnabled,
           layoutType: _selectedLayoutType,
-          // +++ PASSE A FUNÇÃO DO PAINEL DE SETTINGS +++
           onShowSettings: _showSettingsPanel,
         ),
-        
-        // 2. A UI sobreposta (botão voltar, status)
-        // (Deixamos aqui, pois eles não são parte do layout customizável)
         Positioned(
           top: 10,
           left: 10,
@@ -429,4 +465,5 @@ class _GamepadScreenState extends State<GamepadScreen> {
       ],
     );
   }
+  //endregion
 }

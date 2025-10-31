@@ -1,7 +1,10 @@
 // lib/models/gamepad_input_data.dart
+// Define a estrutura de dados para o estado de entrada do gamepad.
 import 'dart:typed_data';
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
 
+//region Classe de Dados do Gamepad
+/// Representa um "snapshot" completo do estado do gamepad em um determinado momento.
 class GamepadInputData {
   final Map<ButtonType, bool> buttons;
   final Map<String, double> analogSticks;
@@ -14,7 +17,11 @@ class GamepadInputData {
     required this.sensors,
     required this.timestamp,
   });
+  //endregion
 
+  //region Conversão para Pacote de Bytes
+  /// Converte o estado atual do gamepad em um pacote de bytes (Uint8List) de 20 bytes,
+  /// seguindo um formato específico para ser enviado ao servidor no PC.
   Uint8List toPacketBytes() {
     final byteData = ByteData(20);
     int buttonFlags = 0;
@@ -54,3 +61,4 @@ class GamepadInputData {
     return byteData.buffer.asUint8List();
   }
 }
+//endregion

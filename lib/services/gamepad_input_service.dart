@@ -61,11 +61,9 @@ class GamepadInputService {
         _inputController.add(inputData);
         break;
 
-      // O caso 'onServiceStatus' foi removido
     }
   }
 
-  // Os métodos startGamepadService e stopGamepadService foram removidos
 
   // Esta função envia dados PARA um gamepad externo (ex: rumble), não para o PC.
   // A deixamos aqui para usos futuros.
@@ -88,6 +86,5 @@ class GamepadInputService {
   void dispose() {
     _inputController.close();
     _connectionController.close();
-    // O _serviceStatusController.close() foi removido
   }
 }

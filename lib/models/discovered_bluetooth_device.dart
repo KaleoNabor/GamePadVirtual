@@ -1,8 +1,10 @@
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as ble;
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart' as classic;
 
+// Enumeração dos tipos de dispositivos Bluetooth.
 enum BluetoothDeviceType { ble, classic }
 
+// Representa um dispositivo Bluetooth descoberto, que pode ser BLE ou Clássico.
 class DiscoveredBluetoothDevice {
   final String address;
   final String name;

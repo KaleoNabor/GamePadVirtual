@@ -89,7 +89,6 @@ Future<void> startGyroscope() async {
 
     _gyroscopeSubscription = gyroscopeEventStream().listen(
       (GyroscopeEvent event) {
-        // ... (código de troca de eixos)
         _gyroscopeController.add(SensorData(
           x: -event.y,
           y: event.x,
@@ -97,15 +96,11 @@ Future<void> startGyroscope() async {
           timestamp: DateTime.now(),
         ));
       },
-      // =========================================================================
-      // CORREÇÃO: Modifique esta linha para imprimir o erro real
-      // =========================================================================
+      
       onError: (error) {
-        // Antes: print('Gyroscope error: $error');
-        // Agora, imprimimos o objeto de erro detalhado.
         print('Gyroscope stream failed with error: $error');
       },
-      // =========================================================================
+      
     );
 
     _isGyroscopeActive = true;

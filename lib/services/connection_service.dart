@@ -247,7 +247,15 @@ class ConnectionService {
             if (json['type'] == 'vibration') {
               final List<dynamic> patternDyn = json['pattern'];
               final List<int> pattern = patternDyn.map((e) => e as int).toList();
-              _vibrationService.vibratePattern(pattern);
+              
+              // --- CORREÇÃO AQUI ---
+              List<int>? amplitudes;
+              if (json['amplitudes'] != null) {
+                final List<dynamic> amplitudesDyn = json['amplitudes'];
+                amplitudes = amplitudesDyn.map((e) => e as int).toList();
+              }
+              
+              _vibrationService.vibratePatternFromGame(pattern, amplitudes: amplitudes);
             }
           } catch(e) { /* Ignora dados inválidos */ }
         });
@@ -289,7 +297,14 @@ class ConnectionService {
             final json = jsonDecode(message);
             if (json['type'] == 'vibration') {
               final pattern = List<int>.from(json['pattern']);
-              _vibrationService.vibratePattern(pattern);
+              
+              // --- CORREÇÃO AQUI ---
+              List<int>? amplitudes;
+              if (json['amplitudes'] != null) {
+                amplitudes = List<int>.from(json['amplitudes']);
+              }
+              
+              _vibrationService.vibratePatternFromGame(pattern, amplitudes: amplitudes);
             }
           } catch (e) { /* Ignora pacotes não-JSON */ }
       }, onDone: disconnect);
@@ -327,10 +342,10 @@ class ConnectionService {
   }
 
   // --- Lógica para Ouvir Comandos de Vibração ---
-  void _listenForVibration(Stream<RawSocketEvent> stream) {
-    stream.listen((RawSocketEvent event) {
+  void _listenForVibration(RawDatagramSocket socket) {
+    socket.listen((RawSocketEvent event) {
       if (event == RawSocketEvent.read) {
-        Datagram? datagram = _udpSocket?.receive();
+        Datagram? datagram = socket.receive();
         if (datagram == null) return;
         
         try {
@@ -339,7 +354,15 @@ class ConnectionService {
           if (json['type'] == 'vibration') {
             final List<dynamic> patternDyn = json['pattern'];
             final List<int> pattern = patternDyn.map((e) => e as int).toList();
-            _vibrationService.vibratePattern(pattern);
+            
+            // --- CORREÇÃO AQUI ---
+            List<int>? amplitudes;
+            if (json['amplitudes'] != null) {
+              final List<dynamic> amplitudesDyn = json['amplitudes'];
+              amplitudes = amplitudesDyn.map((e) => e as int).toList();
+            }
+            
+            _vibrationService.vibratePatternFromGame(pattern, amplitudes: amplitudes);
           }
         } catch (e) {
           // Ignora pacotes que não são JSON
@@ -403,6 +426,11 @@ class ConnectionService {
   }
   
   void dispose() {
+    // Envia o sinal de desconexão ANTES de fechar os sockets
+    if (_currentState.isConnected) {
+      sendDisconnectSignal();
+    }
+    
     _disconnectCurrent();
     _connectionStateController.close();
     _discoveredServersController.close();

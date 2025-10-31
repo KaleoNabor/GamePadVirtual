@@ -254,22 +254,16 @@ class MainActivity: FlutterActivity() {
         return if (kotlin.math.abs(value) > 0.1f) value.toDouble() else 0.0
     }
 
+    // --- FUNÇÃO REMOVIDA (OU ESVAZIADA) ---
     private fun triggerHapticFeedback() {
-        // Por enquanto, vamos assumir que a vibração está sempre ativa quando o app está aberto.
-        // Podemos refinar isso depois se necessário.
-        val duration = 50L // 50 milissegundos
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator?.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
-        } else {
-            @Suppress("DEPRECATION")
-            vibrator?.vibrate(duration)
-        }
+        // (Vazio) - A vibração não é mais disparada aqui
     }
 
     private fun handleGamepadButton(keyCode: Int, isPressed: Boolean) {
-        if (isPressed) {
-            triggerHapticFeedback()
-        }
+        // --- CHAMADA REMOVIDA ---
+        // if (isPressed) {
+        //     triggerHapticFeedback()
+        // }
 
         val buttonName = when (keyCode) {
             KeyEvent.KEYCODE_BUTTON_A -> "BUTTON_A"

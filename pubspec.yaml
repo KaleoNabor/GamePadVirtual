@@ -1,56 +1,83 @@
+# Nome do projeto
 name: gamepadvirtual
+
+# Descrição do projeto
 description: "Transforme seu celular em um gamepad universal com o GamePadVirtual, oferecendo layouts personalizáveis, feedback tátil imersivo e a flexibilidade de conectar-se via Bluetooth, Wi-Fi Direct ou USB para uma experiência de jogo sem"
+
+# Evita a publicação acidental no pub.dev
 publish_to: "none"
+
+# Versão do projeto
 version: 1.0.0+1
 
+# Ambiente de desenvolvimento e versões do SDK
 environment:
   sdk: ^3.6.0
 
+# Dependências de produção do projeto
 dependencies:
+  # Mantém a tela ativa
   wakelock_plus: ^1.1.0
   
+  # Framework principal
   flutter:
     sdk: flutter
 
-
+  # Desativa a otimização de bateria
   disable_battery_optimization: ^1.1.0
 
+  # Gerencia permissões do aplicativo
   permission_handler: ^11.3.1
 
-  # UI e Design
+  # Ícones para o design da interface
   cupertino_icons: ^1.0.8
+  # Fontes do Google para a interface
   google_fonts: ^6.1.0
   
-  # Conectividade
+  # Conectividade Bluetooth Low Energy (BLE)
   flutter_blue_plus: ^1.31.16
+  # Conectividade Bluetooth Clássico
   flutter_bluetooth_serial: ^0.4.0
-  usb_serial: 0.5.2        # NOVO - USB real
+  # Conectividade via USB
+  usb_serial: 0.5.2
   
-  # Sensores e Feedback
+  # Feedback de vibração
   vibration: ^3.0.0
+  # Acesso aos sensores do dispositivo
   sensors_plus: ^7.0.0
   
-  # Armazenamento
+  # Armazenamento de preferências do usuário
   shared_preferences: ^2.0.0
   
-  # Utilitários
-  path_provider: ^2.1.1     # NOVO - Para arquivos
+  # Acesso a diretórios do sistema de arquivos
+  path_provider: ^2.1.1
 
+# Dependências de desenvolvimento e teste
 dev_dependencies:
+  # Testes de widgets do Flutter
   flutter_test:
     sdk: flutter
+  # Regras de lint para análise de código
   flutter_lints: ^5.0.0
+  # Geração de ícones do aplicativo
   flutter_launcher_icons: ^0.13.1
 
+# Configurações específicas do Flutter
 flutter:
+  # Habilita o uso de Material Design
   uses-material-design: true
   
-  # Assets (verifique se o caminho do ícone está correto)
+  # Define os assets (recursos) do aplicativo
   assets:
     - assets/icons/
 
+# Configurações para a geração de ícones do aplicativo
 flutter_launcher_icons:
+  # Gera ícones para Android
   android: true
+  # Gera ícones para iOS
   ios: true
+  # Caminho da imagem para o ícone
   image_path: assets/icons/icone.png
+  # Remove o canal alfa para ícones do iOS
   remove_alpha_ios: true

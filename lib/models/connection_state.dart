@@ -1,13 +1,18 @@
-// MODIFICADO: Adicionado 'wifiDirect' para futuras implementações.
+//region Tipos de Conexão
+/// Enum que define os possíveis tipos de conexão que o aplicativo pode estabelecer.
 enum ConnectionType {
   none,
   bluetooth,
   usb,
-  wifiDirect, // ADICIONADO
+  wifiDirect,
   externalGamepad,
 }
 
+//endregion
+
+// Representa o estado atual da conexão do aplicativo.
 class ConnectionState {
+  //region Propriedades do Estado
   final ConnectionType type;
   final bool isConnected;
   final String? deviceName;
@@ -15,6 +20,7 @@ class ConnectionState {
   final DateTime? connectedAt;
   final bool isExternalGamepad;
 
+  //endregion
   const ConnectionState({
     required this.type,
     required this.isConnected,
@@ -24,6 +30,7 @@ class ConnectionState {
     this.isExternalGamepad = false,
   });
 
+  //region Construtores de Fábrica (Factories)
   factory ConnectionState.disconnected() {
     return const ConnectionState(
       type: ConnectionType.none,
@@ -32,7 +39,6 @@ class ConnectionState {
     );
   }
 
-  // MODIFICADO: Factory para Bluetooth LE com prefixo
   factory ConnectionState.bluetoothLeConnected({
     required String deviceName,
     required String deviceAddress,
@@ -40,14 +46,13 @@ class ConnectionState {
     return ConnectionState(
       type: ConnectionType.bluetooth,
       isConnected: true,
-      deviceName: "BLE: $deviceName", // <<< Adiciona o prefixo
+      deviceName: "BLE: $deviceName",
       deviceAddress: deviceAddress,
       connectedAt: DateTime.now(),
       isExternalGamepad: false,
     );
   }
 
-  // MODIFICADO: Factory para Bluetooth Clássico com prefixo (renomeado)
   factory ConnectionState.bluetoothClassicConnected({
     required String deviceName,
     required String deviceAddress,
@@ -55,14 +60,13 @@ class ConnectionState {
     return ConnectionState(
       type: ConnectionType.bluetooth,
       isConnected: true,
-      deviceName: "Clássico: $deviceName", // <<< Adiciona o prefixo
+      deviceName: "Clássico: $deviceName",
       deviceAddress: deviceAddress,
       connectedAt: DateTime.now(),
       isExternalGamepad: false,
     );
   }
 
-  // MANTIDO: Factory original para compatibilidade (pode ser removido posteriormente)
   factory ConnectionState.bluetoothConnected({
     required String deviceName,
     required String deviceAddress,
@@ -87,7 +91,6 @@ class ConnectionState {
     );
   }
   
-  // ADICIONADO: Factory para Wi-Fi Direct para consistência.
   factory ConnectionState.wifiDirectConnected({required String deviceName}) {
     return ConnectionState(
       type: ConnectionType.wifiDirect,
@@ -107,18 +110,19 @@ class ConnectionState {
       isExternalGamepad: true,
     );
   }
+  //endregion
 
-  // ADICIONADO: Getters para identificar o tipo de conexão
+  //region Getters de Conveniência
   bool get isWifi => type == ConnectionType.wifiDirect;
   bool get isBle => type == ConnectionType.bluetooth && deviceName?.startsWith("BLE:") == true;
   bool get isClassicBt => type == ConnectionType.bluetooth && deviceName?.startsWith("Clássico:") == true;
 
+  //endregion
   String get statusText {
     if (!isConnected) return 'Desconectado';
     
     switch (type) {
       case ConnectionType.bluetooth:
-        // MODIFICADO: Texto mais específico para Bluetooth
         if (isBle) {
           return 'Conectado via Bluetooth LE${deviceName != null ? ' - $deviceName' : ''}';
         } else if (isClassicBt) {
@@ -128,7 +132,6 @@ class ConnectionState {
         }
       case ConnectionType.usb:
         return 'Conectado via USB${deviceName != null ? ' - $deviceName' : ''}';
-      // ADICIONADO: Texto de status para Wi-Fi Direct.
       case ConnectionType.wifiDirect:
         return 'Conectado via Wi-Fi Direct${deviceName != null ? ' - $deviceName' : ''}';
       case ConnectionType.externalGamepad:
@@ -138,6 +141,7 @@ class ConnectionState {
     }
   }
 
+  //region Métodos Utilitários
   ConnectionState copyWith({
     ConnectionType? type,
     bool? isConnected,
@@ -178,4 +182,5 @@ class ConnectionState {
       isExternalGamepad,
     );
   }
+  //endregion
 }

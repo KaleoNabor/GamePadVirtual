@@ -1,3 +1,4 @@
+// Representa os dados de um sensor, como acelerômetro ou giroscópio.
 class SensorData {
   final double x;
   final double y;

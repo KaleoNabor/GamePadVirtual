@@ -13,11 +13,14 @@ class StorageService {
   static const String _gyroscopeEnabledKey = 'gyroscope_enabled';
   static const String _accelerometerEnabledKey = 'accelerometer_enabled';
 
-  // +++ NOVA CHAVE PARA O LAYOUT CUSTOMIZADO +++
+
   static const String _customLayoutKey = 'custom_layout_config';
   
-  // +++ ADICIONE ESTA NOVA CHAVE +++
+
   static const String _customLayoutBaseKey = 'custom_layout_base';
+
+ 
+  static const String _externalDigitalTriggersKey = 'external_digital_triggers';
 
   // --- Métodos de Layout (GamepadType) ---
   Future<GamepadLayoutType> getSelectedLayout() async {
@@ -37,7 +40,6 @@ class StorageService {
     await prefs.setString(_selectedLayoutKey, layout.toString());
   }
   
-  // +++ ADICIONE ESTES DOIS NOVOS MÉTODOS +++
 
   /// Salva qual é o layout base (Xbox, PS) para a personalização
   Future<void> setCustomLayoutBase(GamepadLayoutType layout) async {
@@ -103,7 +105,17 @@ class StorageService {
     await prefs.setBool(_accelerometerEnabledKey, enabled);
   }
 
-  // +++ NOVOS MÉTODOS PARA O LAYOUT CUSTOMIZADO +++
+  Future<bool> isExternalDigitalTriggersEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Default é 'false'
+    return prefs.getBool(_externalDigitalTriggersKey) ?? false;
+  }
+
+  Future<void> setExternalDigitalTriggersEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_externalDigitalTriggersKey, enabled);
+  }
+
 
   /// Salva a lista de configurações de layout como uma string JSON.
   Future<void> saveCustomLayout(List<ButtonLayoutConfig> layout) async {
@@ -124,8 +136,6 @@ class StorageService {
     final String? jsonString = prefs.getString(_customLayoutKey);
 
     if (jsonString == null) {
-      // ANTES: return defaultGamepadLayout;
-      // DEPOIS (CORRETO):
       return List.from(defaultGamepadLayout);
     }
 
@@ -140,8 +150,6 @@ class StorageService {
       return layout;
     } catch (e) {
       print('Erro ao carregar layout customizado: $e');
-      // ANTES: return defaultGamepadLayout;
-      // DEPOIS (CORRETO):
       return List.from(defaultGamepadLayout);
     }
   }

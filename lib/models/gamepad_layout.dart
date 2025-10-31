@@ -4,7 +4,7 @@ enum GamepadLayoutType {
   xbox,
   playstation,
   nintendo,
-  custom, // +++ ADICIONE ESTA LINHA +++
+  custom,
 }
 
 enum ButtonType {
