@@ -1,5 +1,4 @@
 // lib/models/button_layout_config.dart
-import 'package:gamepadvirtual/models/gamepad_layout.dart';
 
 // Enumeração de todos os elementos da interface do gamepad que podem ser configurados.
 // Mapeia todos os widgets controláveis na tela

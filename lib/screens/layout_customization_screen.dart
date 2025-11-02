@@ -201,7 +201,7 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
                   ..._layoutConfig!
                       .where((config) => config.isVisible)
                       .map((config) => _buildDraggableElement(config))
-                      .toList(),
+                      ,
                   _buildTopBar(),
                 ],
               ),

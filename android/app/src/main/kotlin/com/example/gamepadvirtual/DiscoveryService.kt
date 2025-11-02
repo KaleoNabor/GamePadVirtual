@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.NetworkInterface
 import kotlin.concurrent.thread
 
 class DiscoveryService : Service() {
@@ -32,11 +33,15 @@ class DiscoveryService : Service() {
         const val EXTRA_SERVER_IP = "serverIp"
     }
 
+    // --- INICIALIZAÇÃO DO SERVIÇO ---
+    // Cria o canal de notificação quando o serviço é criado
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
     }
 
+    // --- COMANDO DE INÍCIO ---
+    // Inicia o serviço em primeiro plano com notificação
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "STOP_SERVICE") {
             stopSelf()
@@ -52,23 +57,43 @@ class DiscoveryService : Service() {
         return START_STICKY
     }
 
+    // --- SERVIÇO DE DESCOBERTA MODIFICADO ---
+    // Agora envia pacotes para Wi-Fi E Ancoragem USB
     private fun startDiscovery() {
         discoveryThread = thread {
             try {
                 socket = DatagramSocket()
                 socket?.broadcast = true
 
-                // Thread para ouvir as respostas
+                // Thread para ouvir as respostas (sem mudanças)
                 thread {
                     listenForResponses()
                 }
 
-                // Loop para enviar a query de descoberta a cada 3 segundos
+                // Loop para enviar a query de descoberta
                 while (isRunning) {
                     try {
-                        val broadcastAddress = InetAddress.getByName("255.255.255.255")
-                        val packet = DatagramPacket(DISCOVERY_QUERY, DISCOVERY_QUERY.size, broadcastAddress, DISCOVERY_PORT)
-                        socket?.send(packet)
+                        // --- LÓGICA DE DESCOBERTA MODIFICADA ---
+                        
+                        // 1. Pega todos os endereços de broadcast (Wi-Fi, USB, etc.)
+                        val broadcastAddresses = getBroadcastAddresses()
+                        
+                        // 2. Envia para o broadcast global (para Wi-Fi padrão)
+                        val globalBroadcast = InetAddress.getByName("255.255.255.255")
+                        val packetGlobal = DatagramPacket(DISCOVERY_QUERY, DISCOVERY_QUERY.size, globalBroadcast, DISCOVERY_PORT)
+                        socket?.send(packetGlobal)
+
+                        // 3. Envia para os broadcasts de sub-rede (para Ancoragem USB)
+                        broadcastAddresses.forEach { broadcastAddr ->
+                            try {
+                                val packetSubnet = DatagramPacket(DISCOVERY_QUERY, DISCOVERY_QUERY.size, broadcastAddr, DISCOVERY_PORT)
+                                socket?.send(packetSubnet)
+                            } catch (e: Exception) {
+                                // Ignora erros de envio da sub-rede
+                            }
+                        }
+                        // --- FIM DA MODIFICAÇÃO ---
+
                     } catch (e: Exception) {
                         // Ignora erros de envio
                     }
@@ -82,6 +107,34 @@ class DiscoveryService : Service() {
         }
     }
 
+    // --- NOVA FUNÇÃO ADICIONADA ---
+    // Encontra endereços de broadcast de todas as interfaces de rede
+    private fun getBroadcastAddresses(): List<InetAddress> {
+        val broadcastList = mutableListOf<InetAddress>()
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                
+                // Ignora interfaces que estão desligadas ou são de loopback
+                if (!networkInterface.isUp || networkInterface.isLoopback) {
+                    continue
+                }
+                
+                networkInterface.interfaceAddresses.forEach { interfaceAddress ->
+                    interfaceAddress.broadcast?.let {
+                        broadcastList.add(it)
+                    }
+                }
+            }
+        } catch (ex: Exception) {
+            // Ignora erros ao listar interfaces
+        }
+        return broadcastList.distinct() // Retorna apenas endereços únicos
+    }
+
+    // --- ESCUTA DE RESPOSTAS ---
+    // Processa respostas dos servidores encontrados
     private fun listenForResponses() {
         val buffer = ByteArray(1024)
         val packet = DatagramPacket(buffer, buffer.size)
@@ -106,6 +159,8 @@ class DiscoveryService : Service() {
         }
     }
 
+    // --- DESTRUIÇÃO DO SERVIÇO ---
+    // Limpa recursos quando o serviço é parado
     override fun onDestroy() {
         isRunning = false
         socket?.close()
@@ -113,8 +168,12 @@ class DiscoveryService : Service() {
         super.onDestroy()
     }
 
+    // --- BIND DO SERVIÇO ---
+    // Serviço não vinculado, retorna null
     override fun onBind(intent: Intent?): IBinder? = null
 
+    // --- CRIAÇÃO DA NOTIFICAÇÃO ---
+    // Cria a notificação de serviço em primeiro plano
     private fun createNotification(): Notification {
         val stopIntent = Intent(this, DiscoveryService::class.java).apply { action = "STOP_SERVICE" }
         val pendingStopIntent = PendingIntent.getService(this, 0, stopIntent, PendingIntent.FLAG_IMMUTABLE)
@@ -128,6 +187,8 @@ class DiscoveryService : Service() {
             .build()
     }
 
+    // --- CRIAÇÃO DO CANAL DE NOTIFICAÇÃO ---
+    // Cria o canal de notificação para Android 8+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(

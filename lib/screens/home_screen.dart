@@ -142,27 +142,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           builder: (context, snapshot) {
             final servers = snapshot.data ?? [];
             return Container(
-              height: MediaQuery.of(context).size.height * 0.4,
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.only(
+                top: 16, left: 16, right: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Servidores Encontrados', style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   const Text('Selecione o PC para conectar. Se nenhum aparecer, verifique se o servidor está rodando e na mesma rede.'),
                   const SizedBox(height: 16),
+                  
                   if (snapshot.connectionState == ConnectionState.waiting || servers.isEmpty)
-                    const Expanded(child: Center(child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Procurando na rede local...'),
-                      ],
-                    )))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24.0),
+                      child: Center(
+                        child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 16),
+                          const Text('Procurando na rede local...'),
+                        ],
+                      )),
+                    )
                   else
-                    Expanded(
+                    Flexible(
                       child: ListView.builder(
+                        shrinkWrap: true,
                         itemCount: servers.length,
                         itemBuilder: (context, index) {
                           final server = servers[index];
@@ -225,29 +234,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           builder: (context, snapshot) {
             final devices = snapshot.data ?? [];
             return Container(
-              height: MediaQuery.of(context).size.height * 0.4,
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.only(
+                top: 16, left: 16, right: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Dispositivos Bluetooth Encontrados', style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   const Text('Selecione o seu PC. Dispositivos BLE são recomendados para menor latência.'),
                   const SizedBox(height: 16),
+                  
                   if (snapshot.connectionState == ConnectionState.waiting && devices.isEmpty)
-                    const Expanded(child: Center(child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [ 
-                        CircularProgressIndicator(), 
-                        SizedBox(height: 16), 
-                        Text('Procurando dispositivos...'), 
-                      ],
-                    )))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24.0),
+                      child: Center(child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [ 
+                          const CircularProgressIndicator(), 
+                          const SizedBox(height: 16), 
+                          const Text('Procurando dispositivos...'), 
+                        ],
+                      )),
+                    )
                   else if (devices.isEmpty)
-                    const Expanded(child: Center(child: Text('Nenhum dispositivo encontrado.')))
+                    const Center(child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24.0),
+                      child: Text('Nenhum dispositivo encontrado.'),
+                    ))
                   else
-                    Expanded(
+                    Flexible(
                       child: ListView.builder(
+                        shrinkWrap: true,
                         itemCount: devices.length,
                         itemBuilder: (context, index) {
                           final device = devices[index];
