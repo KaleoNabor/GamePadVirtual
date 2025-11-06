@@ -1,5 +1,3 @@
-// lib/widgets/gamepad_layout_view.dart
-
 import 'package:flutter/material.dart';
 import 'package:gamepadvirtual/models/button_layout_config.dart';
 import 'package:gamepadvirtual/models/gamepad_layout.dart';
@@ -36,7 +34,6 @@ class GamepadLayoutView extends StatefulWidget {
 class _GamepadLayoutViewState extends State<GamepadLayoutView> {
   List<ButtonLayoutConfig>? _layoutConfig;
 
-  // Inicialização e atualização do widget
   @override
   void initState() {
     super.initState();
@@ -51,7 +48,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     }
   }
 
-  // Carrega layout personalizado ou padrão conforme seleção
   Future<void> _loadLayout() async {
     List<ButtonLayoutConfig> loadedLayout;
 
@@ -69,7 +65,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     }
   }
 
-  // Métodos para controle de estado dos botões
   void _onButtonPressed(ButtonType buttonType) {
     widget.gamepadState.onButtonPressed(buttonType);
     if (widget.hapticFeedbackEnabled) widget.vibrationService.vibrateForButton();
@@ -83,7 +78,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     widget.gamepadState.onAnalogStickChanged(isLeft, x, y);
   }
 
-  // Construção da interface principal do gamepad
   @override
   Widget build(BuildContext context) {
     final Size screenSize = MediaQuery.of(context).size;
@@ -105,7 +99,6 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
-  // Constrói elemento posicionado baseado na configuração
   Widget _buildPositionedElement(ButtonLayoutConfig config, Size screenSize) {
     Widget child;
 
@@ -171,12 +164,10 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
     );
   }
 
-  // Métodos auxiliares para cálculo de cores
   Color _getTextColor(Color backgroundColor) {
     return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
   }
 
-  // Métodos de construção de elementos específicos do gamepad
   Widget _buildDPad(ButtonLayoutConfig config) {
     final buttonSize = config.width / 3;
     
@@ -215,9 +206,10 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
   Widget _buildGamepadButton(GamepadButton button, double size) {
     final isPressed = widget.gamepadState.buttonStates[button.type] ?? false;
     return GestureDetector(
-      onTapDown: (_) => _onButtonPressed(button.type),
-      onTapUp: (_) => _onButtonReleased(button.type),
-      onTapCancel: () => _onButtonReleased(button.type),
+      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
+      onPanStart: (_) => _onButtonPressed(button.type),
+      onPanEnd: (_) => _onButtonReleased(button.type),
+      onPanCancel: () => _onButtonReleased(button.type),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 50),
         width: size,
@@ -251,9 +243,10 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
   Widget _buildDirectionalButton(IconData icon, ButtonType buttonType, double size) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
-      onTapDown: (_) => _onButtonPressed(buttonType),
-      onTapUp: (_) => _onButtonReleased(buttonType),
-      onTapCancel: () => _onButtonReleased(buttonType),
+      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
+      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanEnd: (_) => _onButtonReleased(buttonType),
+      onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 50),
         width: size,
@@ -270,9 +263,10 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
   Widget _buildShoulderButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
-      onTapDown: (_) => _onButtonPressed(buttonType),
-      onTapUp: (_) => _onButtonReleased(buttonType),
-      onTapCancel: () => _onButtonReleased(buttonType),
+      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
+      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanEnd: (_) => _onButtonReleased(buttonType),
+      onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 50),
         width: config.width,
@@ -298,9 +292,10 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
   Widget _buildTriggerButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
-      onTapDown: (_) => _onButtonPressed(buttonType),
-      onTapUp: (_) => _onButtonReleased(buttonType),
-      onTapCancel: () => _onButtonReleased(buttonType),
+      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
+      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanEnd: (_) => _onButtonReleased(buttonType),
+      onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 50),
         width: config.width,
@@ -326,9 +321,10 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
   Widget _buildStickButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
-      onTapDown: (_) => _onButtonPressed(buttonType),
-      onTapUp: (_) => _onButtonReleased(buttonType),
-      onTapCancel: () => _onButtonReleased(buttonType),
+      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
+      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanEnd: (_) => _onButtonReleased(buttonType),
+      onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 50),
         width: config.width,
@@ -354,9 +350,10 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
   Widget _buildSystemButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
     return GestureDetector(
-      onTapDown: (_) => _onButtonPressed(buttonType),
-      onTapUp: (_) => _onButtonReleased(buttonType),
-      onTapCancel: () => _onButtonReleased(buttonType),
+      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
+      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanEnd: (_) => _onButtonReleased(buttonType),
+      onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 50),
         width: config.width,
