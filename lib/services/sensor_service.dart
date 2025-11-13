@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:gamepadvirtual/services/storage_service.dart';
@@ -62,7 +63,7 @@ class SensorService {
         ));
       },
       onError: (error) {
-        print('Accelerometer error: \$error');
+        debugPrint('Accelerometer error: \$error');
       },
     );
 
@@ -98,7 +99,7 @@ Future<void> startGyroscope() async {
       },
       
       onError: (error) {
-        print('Gyroscope stream failed with error: $error');
+        debugPrint('Gyroscope stream failed with error: $error');
       },
       
     );

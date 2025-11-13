@@ -52,47 +52,46 @@ class GamepadInputData {
     byteData.setUint8(6, ((analogSticks['leftTrigger'] ?? 0.0) * 255).toInt());
     byteData.setUint8(7, ((analogSticks['rightTrigger'] ?? 0.0) * 255).toInt());
 
-    // ===================================================================
-    // --- MUDANÇAS NO GIROSCÓPIO ---
-    // O sensor_service troca X e Y (x: -event.y, y: event.x)
-    // Nosso GamepadStateService armazena:
-    //   sensors['gyroX'] = -event.y (do celular)
-    //   sensors['gyroY'] = event.x (do celular)
-    //
-    // O servidor C++ espera:
-    //   packet.gyroX seja o X do celular
-    //   packet.gyroY seja o Y do celular
-    //
-    // Portanto, precisamos DESFAZER a troca aqui.
+    // --- CORREÇÃO: Mapeamento preciso para Modo Paisagem (Landscape) ---
+    // No Android, o eixo do sensor é relativo à tela padrão (Portrait).
+    // Quando seguramos em Landscape (deitado):
+    // - O eixo Y do celular vira o eixo X do "Gamepad".
+    // - O eixo X do celular vira o eixo -Y do "Gamepad".
     
-    // O valor de 'gyroY' (que contém o X original do celular) vai para o campo gyroX do pacote
-    final gyroxToSend = (sensors['gyroY'] ?? 0.0) * 100.0; 
-    // O valor de 'gyroX' (que contém o -Y original do celular) vai para o campo gyroY do pacote
-    final gyroyToSend = (sensors['gyroX'] ?? 0.0) * 100.0; 
-    // Z permanece o mesmo
-    final gyrozToSend = (sensors['gyroZ'] ?? 0.0) * 100.0;
-
-    byteData.setInt16(8, gyroxToSend.round(), Endian.little);
-    byteData.setInt16(10, gyroyToSend.round(), Endian.little);
-    byteData.setInt16(12, gyrozToSend.round(), Endian.little);
-
-    // --- MUDANÇAS NO ACELERÔMETRO ---
-    // O servidor C++ espera: (packet.accelX / 4096.0) para obter 'g's.
-    // O sensor do celular nos dá m/s^2.
-    // 1g = 9.80665 m/s^2.
-    // Precisamos enviar: (valor_em_ms2 / 9.80665) * 4096.0
+    // Recuperando dados brutos (assumindo que SensorService entrega dados brutos ou minimamente tratados)
+    // Se o seu SensorService já faz a troca, verifique para não trocar duas vezes.
+    // Vou assumir aqui que SensorService entrega os dados RAW do plugin sensors_plus.
     
+    final rawGyroX = sensors['gyroX'] ?? 0.0;
+    final rawGyroY = sensors['gyroY'] ?? 0.0;
+    final rawGyroZ = sensors['gyroZ'] ?? 0.0;
+
+    // Aplicando a rotação para Landscape
+    final double gyroXGame = -rawGyroY; // Y vira X invertido ou direto dependendo do lado da rotação
+    final double gyroYGame = rawGyroX;  // X vira Y
+    final double gyroZGame = rawGyroZ;  // Z (rotação da tela) se mantém
+
+    // Escala para envio (x100 para precisão em int16)
+    byteData.setInt16(8, (gyroXGame * 100).round(), Endian.little);
+    byteData.setInt16(10, (gyroYGame * 100).round(), Endian.little);
+    byteData.setInt16(12, (gyroZGame * 100).round(), Endian.little);
+
+    // --- Acelerômetro (lógica similar) ---
     const double gravity = 9.80665;
     const double accelScale = 4096.0;
+    
+    final rawAccelX = sensors['accelX'] ?? 0.0;
+    final rawAccelY = sensors['accelY'] ?? 0.0;
+    final rawAccelZ = sensors['accelZ'] ?? 0.0;
 
-    final accelX = ((sensors['accelX'] ?? 0.0) / gravity) * accelScale;
-    final accelY = ((sensors['accelY'] ?? 0.0) / gravity) * accelScale;
-    final accelZ = ((sensors['accelZ'] ?? 0.0) / gravity) * accelScale;
+    // Rotação Landscape
+    final double accelXGame = -rawAccelY;
+    final double accelYGame = rawAccelX;
+    final double accelZGame = rawAccelZ;
 
-    byteData.setInt16(14, accelX.round(), Endian.little);
-    byteData.setInt16(16, accelY.round(), Endian.little);
-    byteData.setInt16(18, accelZ.round(), Endian.little);
-    // ===================================================================
+    byteData.setInt16(14, ((accelXGame / gravity) * accelScale).round(), Endian.little);
+    byteData.setInt16(16, ((accelYGame / gravity) * accelScale).round(), Endian.little);
+    byteData.setInt16(18, ((accelZGame / gravity) * accelScale).round(), Endian.little);
 
     return byteData.buffer.asUint8List();
   }

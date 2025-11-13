@@ -138,9 +138,11 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
             children: [
               Row(
                 children: [
+                  // ignore: deprecated_member_use
                   Radio<GamepadLayoutType>(
                     value: layoutType,
                     groupValue: _selectedLayout,
+                    // ignore: deprecated_member_use
                     onChanged: (value) {
                       if (value != null) {
                         if (value == GamepadLayoutType.custom) {
@@ -231,9 +233,13 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
       ),
     );
 
+    // CORREÇÃO: Verificação de mounted após async gap
     if (baseType == null || !mounted) return;
 
     await _storageService.setCustomLayoutBase(baseType);
+
+    // CORREÇÃO: Verificação de mounted após async gap
+    if (!mounted) return;
 
     await Navigator.push(
       context,
@@ -253,6 +259,7 @@ class _LayoutSelectionScreenState extends State<LayoutSelectionScreen> {
   Future<void> _saveLayout() async {
     await _storageService.setSelectedLayout(_selectedLayout);
     
+    // CORREÇÃO: Verificação de mounted após async gap
     if (!mounted) return;
     
     ScaffoldMessenger.of(context).showSnackBar(

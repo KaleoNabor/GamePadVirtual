@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:gamepadvirtual/models/connection_state.dart';
+import 'package:flutter/foundation.dart';
 
 class GamepadInputService {
   static const MethodChannel _channel = MethodChannel('gamepad_input_channel');
@@ -36,7 +37,7 @@ class GamepadInputService {
       }
       _isInitialized = true;
     } catch (e) {
-      print('Erro ao inicializar detecção de gamepad: $e');
+      debugPrint('Erro ao inicializar detecção de gamepad: $e');
     }
   }
 
@@ -74,7 +75,7 @@ class GamepadInputService {
       // O nome do método aqui é um exemplo, teríamos que implementar no lado nativo
       await _channel.invokeMethod('sendRumbleData', data);
     } catch (e) {
-      print('Erro ao enviar dados de rumble: $e');
+      debugPrint('Erro ao enviar dados de rumble: $e');
     }
   }
 

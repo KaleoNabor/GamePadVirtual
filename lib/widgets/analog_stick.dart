@@ -160,7 +160,8 @@ class AnalogStickPainter extends CustomPainter {
     // Draw stick shadow (apenas se estiver sendo arrastado para performance)
     if (isDragging) {
       final shadowOffset = Offset(stickOffset.dx + 2, stickOffset.dy + 2);
-      paint.color = Colors.black.withOpacity(0.3);
+      // CORREÇÃO: Substituição de withOpacity por withAlpha
+      paint.color = Colors.black.withAlpha((255 * 0.3).round());
       paint.style = PaintingStyle.fill;
       canvas.drawCircle(shadowOffset, innerRadius, paint);
     }

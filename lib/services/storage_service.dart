@@ -1,5 +1,6 @@
+// ignore_for_file: non_constant_identifier_names
 // lib/services/storage_service.dart
-
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:gamepadvirtual/core/default_layout.dart';
 import 'package:gamepadvirtual/models/button_layout_config.dart';
@@ -150,7 +151,7 @@ class StorageService {
           .toList();
       return layout;
     } catch (e) {
-      print('Erro ao carregar layout customizado para $baseType: $e');
+      debugPrint('Erro ao carregar layout customizado para $baseType: $e');
       return List.from(defaultGamepadLayout);
     }
   }

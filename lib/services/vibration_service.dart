@@ -1,5 +1,6 @@
 import 'package:vibration/vibration.dart';
 import 'package:gamepadvirtual/services/storage_service.dart';
+import 'package:flutter/foundation.dart';
 
 class VibrationService {
   final StorageService _storageService = StorageService();
@@ -21,7 +22,7 @@ class VibrationService {
         await Vibration.vibrate(duration: _lightVibration);
       }
     } catch (e) {
-      print('Vibration error: $e');
+      debugPrint('Vibration error: $e');
     } finally {
       // Delay para evitar vibrações muito rápidas
       await Future.delayed(const Duration(milliseconds: 50));
@@ -48,7 +49,7 @@ class VibrationService {
         await Vibration.vibrate(duration: 100);
       }
     } catch (e) {
-      print('Rumble vibration error: $e');
+      debugPrint('Rumble vibration error: $e');
     }
   }
 
@@ -65,7 +66,7 @@ class VibrationService {
         await Vibration.vibrate(pattern: pattern, repeat: 0);
       }
     } catch (e) {
-      print('Analog loop vibration error: $e');
+      debugPrint('Analog loop vibration error: $e');
     }
   }
 
@@ -76,7 +77,7 @@ class VibrationService {
         await Vibration.cancel();
       }
     } catch (e) {
-      print('Vibration cancel error: $e');
+      debugPrint('Vibration cancel error: $e');
     }
   }
 }

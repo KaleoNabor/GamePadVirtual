@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:gamepadvirtual/models/connection_state.dart' as models;
@@ -5,8 +6,12 @@ import 'package:gamepadvirtual/screens/layout_selection_screen.dart';
 import 'package:gamepadvirtual/screens/gamepad_screen.dart';
 import 'package:gamepadvirtual/services/connection_service.dart';
 import 'package:gamepadvirtual/widgets/connection_status.dart';
-import 'package:permission_handler/permission_handler.dart';
 
+// =============================================
+// TELA PRINCIPAL DO APLICATIVO
+// =============================================
+
+/// Tela inicial com opções de conexão e navegação
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -15,35 +20,98 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  // =============================================
+  // SERVIÇOS E ESTADO
+  // =============================================
+  
+  /// Serviço de gerenciamento de conexões
   final ConnectionService _connectionService = ConnectionService();
+  
+  /// Estado atual da conexão
   models.ConnectionState _connectionState = models.ConnectionState.disconnected();
   
+  /// Timer para verificação periódica da conexão
+  Timer? _connectionCheckTimer;
+
+  // =============================================
+  // INICIALIZAÇÃO E CICLO DE VIDA
+  // =============================================
+
   @override
   void initState() {
     super.initState();
+    
+    // Registra observer do ciclo de vida do app
     WidgetsBinding.instance.addObserver(this);
+    
+    // Escuta mudanças no estado da conexão
     _connectionService.connectionStateStream.listen((state) {
       if (mounted) setState(() => _connectionState = state);
     });
+    
+    // Escuta mensagens do sistema (servidor cheio, etc)
     _connectionService.systemMessageStream.listen(_handleSystemMessage);
+    
+    // Inicializa com estado atual
     setState(() {
       _connectionState = _connectionService.currentState;
     });
+
+    // Configura verificação periódica da conexão
+    _connectionCheckTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      _connectionService.checkConnectionStatus();
+    });
   }
 
-  // Processamento de mensagens do sistema recebidas do servidor
-  void _handleSystemMessage(String code) {
-    if (code == 'server_full' && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Falha ao conectar: O servidor está cheio (Máx 8 jogadores).'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
+  @override
+  void dispose() {
+    // Limpa recursos
+    _connectionCheckTimer?.cancel();
+    _connectionCheckTimer = null;
+    WidgetsBinding.instance.removeObserver(this);
+    _connectionService.dispose();
+    super.dispose();
+  }
+
+  // =============================================
+  // GERENCIAMENTO DO CICLO DE VIDA DO APP
+  // =============================================
+
+  /// Chamado quando o estado do app muda (background/foreground)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Quando o app volta ao foreground, verifica o status da conexão
+      _connectionService.checkConnectionStatus();
     }
   }
 
-  // Diálogo de informações com link para download do servidor
+  // =============================================
+  // TRATAMENTO DE MENSAGENS DO SISTEMA
+  // =============================================
+
+  /// Processa mensagens recebidas do servidor
+  void _handleSystemMessage(String code) {
+    // Usa o context diretamente sem async gap
+    if (code == 'server_full') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Falha ao conectar: O servidor está cheio (Máx 8 jogadores).'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  // =============================================
+  // DIALOGOS E MODAIS INFORMATIVOS
+  // =============================================
+
+  /// Exibe informações sobre download do servidor PC
   void _showInfoDialog() {
     final Uri serverUrl = Uri.parse('https://github.com/KaleoNabor/GamePadVirtual-Desktop/releases/');
 
@@ -57,30 +125,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Informações sobre o servidor
                 const Text(
                   'Para usar este aplicativo, você precisa do servidor rodando no seu PC. '
                   'Baixe a versão mais recente do servidor no link abaixo:',
                   style: TextStyle(fontSize: 14),
                 ),
                 const SizedBox(height: 16),
+                
+                // Link para download
                 InkWell(
-                  onTap: () async {
-                    if (await canLaunchUrl(serverUrl)) {
-                      await launchUrl(serverUrl, mode: LaunchMode.externalApplication);
-                    } else {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Não foi possível abrir o link.')),
-                        );
-                      }
-                    }
-                  },
+                  onTap: () => _launchUrl(serverUrl),
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      color: Theme.of(context).colorScheme.primary.withAlpha(25),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+                      border: Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(76)),
                     ),
                     child: Row(
                       children: [
@@ -101,6 +162,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: 16),
+                
+                // Instruções de uso
                 const Text(
                   'Instruções:',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -128,10 +191,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Descoberta e conexão com servidores na rede local
+  /// Lança URL externa com tratamento seguro de contexto
+  Future<void> _launchUrl(Uri url) async {
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // CORREÇÃO: Verificação de mounted após async gap
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível abrir o link.')),
+        );
+      }
+    } catch (e) {
+      // CORREÇÃO: Verificação de mounted após async gap
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao abrir o link.')),
+      );
+    }
+  }
+
+  // =============================================
+  // DESCOBERTA E SELEÇÃO DE SERVIDORES
+  // =============================================
+
+  /// Busca servidores na rede local e exibe modal de seleção
   void _discoverAndShowServers() {
+    // Inicia descoberta de servidores
     _connectionService.discoverServers();
 
+    // Exibe modal com servidores encontrados
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -141,34 +231,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           initialData: const [],
           builder: (context, snapshot) {
             final servers = snapshot.data ?? [];
+            
             return Container(
               padding: EdgeInsets.only(
-                top: 16, left: 16, right: 16,
+                top: 16,
+                left: 16,
+                right: 16,
                 bottom: MediaQuery.of(context).viewInsets.bottom + 16,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Servidores Encontrados', style: Theme.of(context).textTheme.headlineSmall),
+                  // Cabeçalho do modal
+                  Text(
+                    'Servidores Encontrados',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
                   const SizedBox(height: 8),
-                  const Text('Selecione o PC para conectar. Se nenhum aparecer, verifique se o servidor está rodando e na mesma rede.'),
+                  const Text(
+                    'Selecione o PC para conectar. Se nenhum aparecer, verifique se o servidor está rodando e na mesma rede.',
+                  ),
                   const SizedBox(height: 16),
                   
+                  // Lista de servidores ou indicador de carregamento
                   if (snapshot.connectionState == ConnectionState.waiting || servers.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24.0),
                       child: Center(
                         child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: 16),
-                          const Text('Procurando na rede local...'),
-                        ],
-                      )),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 16),
+                            const Text('Procurando na rede local...'),
+                          ],
+                        ),
+                      ),
                     )
                   else
+                    // Lista de servidores encontrados
                     Flexible(
                       child: ListView.builder(
                         shrinkWrap: true,
@@ -180,18 +282,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               leading: const Icon(Icons.computer),
                               title: Text(server.name),
                               subtitle: Text(server.ipAddress.address),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                final success = await _connectionService.connectToServer(server);
-                                
-                                if (!mounted) return;
-                                
-                                if (!success) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Falha ao conectar ao servidor. Verifique se o servidor está rodando e o firewall do PC.')),
-                                  );
-                                }
-                              },
+                              onTap: () => _connectToServer(server),
                             ),
                           );
                         },
@@ -204,132 +295,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       },
     ).whenComplete(() {
+      // Para descoberta quando modal é fechado
       _connectionService.stopDiscovery();
     });
   }
 
-  // Conexão via Bluetooth com verificação de permissões
-  void _showBluetoothConnectionDialog() async {
-    var scanPermission = await Permission.bluetoothScan.request();
-    var connectPermission = await Permission.bluetoothConnect.request();
-
-    if (scanPermission.isDenied || connectPermission.isDenied) {
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Permissões de Bluetooth são necessárias para encontrar o servidor.'))
-      );
-      }
-      return;
-    }
+  /// Conecta a um servidor com tratamento seguro de contexto
+  Future<void> _connectToServer(DiscoveredServer server) async {
+    // Fecha o modal primeiro
+    Navigator.of(context).pop();
     
-    _connectionService.discoverAllBluetoothDevices();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return StreamBuilder<List<DiscoveredBluetoothDevice>>(
-          stream: _connectionService.unifiedBluetoothDevicesStream,
-          initialData: const [],
-          builder: (context, snapshot) {
-            final devices = snapshot.data ?? [];
-            return Container(
-              padding: EdgeInsets.only(
-                top: 16, left: 16, right: 16,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Dispositivos Bluetooth Encontrados', style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 8),
-                  const Text('Selecione o seu PC. Dispositivos BLE são recomendados para menor latência.'),
-                  const SizedBox(height: 16),
-                  
-                  if (snapshot.connectionState == ConnectionState.waiting && devices.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24.0),
-                      child: Center(child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [ 
-                          const CircularProgressIndicator(), 
-                          const SizedBox(height: 16), 
-                          const Text('Procurando dispositivos...'), 
-                        ],
-                      )),
-                    )
-                  else if (devices.isEmpty)
-                    const Center(child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24.0),
-                      child: Text('Nenhum dispositivo encontrado.'),
-                    ))
-                  else
-                    Flexible(
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: devices.length,
-                        itemBuilder: (context, index) {
-                          final device = devices[index];
-                          return Card(
-                            child: ListTile(
-                              leading: Icon(
-                                device.type == DiscoveredDeviceType.ble
-                                  ? Icons.bluetooth_searching 
-                                  : Icons.bluetooth_connected,
-                                color: device.type == DiscoveredDeviceType.ble
-                                  ? Colors.blue 
-                                  : Colors.grey,
-                              ),
-                              title: Text(device.name),
-                              subtitle: Text(device.address),
-                              trailing: device.type == DiscoveredDeviceType.ble
-                                ? Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.green),
-                                    ),
-                                    child: const Text(
-                                      "Recomendado",
-                                      style: TextStyle(
-                                        color: Colors.green,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                              onTap: () async {
-                                Navigator.pop(context);
-                                final success = await _connectionService.connectToBluetoothDevice(device);
-                                
-                                if (!mounted) return;
-                                
-                                if (!success) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Falha ao conectar ao dispositivo. Verifique se o servidor está rodando e o firewall do PC.')),
-                                  );
-                                }
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    ).whenComplete(() {
-      _connectionService.stopAllBluetoothDiscovery();
-    });
+    final success = await _connectionService.connectToServer(server);
+    
+    // CORREÇÃO: Verificação de mounted após async gap
+    if (!mounted) return;
+    
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Falha ao conectar ao servidor. Verifique se o servidor está rodando e o firewall do PC.',
+          ),
+        ),
+      );
+    }
   }
 
-  // Navegação para outras telas
+  // =============================================
+  // NAVEGAÇÃO ENTRE TELAS
+  // =============================================
+
+  /// Navega para a tela do gamepad
   void _goToGamepad() {
     Navigator.push(
       context,
@@ -337,6 +333,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// Navega para seleção de layout
   void _goToLayoutSelection() {
     Navigator.push(
       context,
@@ -344,13 +341,52 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Interface principal da tela inicial
+  // =============================================
+  // WIDGET DE STATUS DE CONEXÃO CENTRALIZADO
+  // =============================================
+
+  /// Constroi o widget de status de conexão centralizado
+  Widget _buildConnectionStatus() {
+    return Container(
+      width: double.infinity, // Ocupa toda a largura disponível
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Widget de status principal
+          ConnectionStatusWidget(
+            connectionState: _connectionState,
+            showDetails: true,
+          ),
+          const SizedBox(height: 8),
+          
+          // Texto auxiliar quando desconectado
+          if (!_connectionState.isConnected)
+            const Text(
+              'Conecte-se a um servidor para começar',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // =============================================
+  // CONSTRUÇÃO DA INTERFACE PRINCIPAL
+  // =============================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('GamePadVirtual'),
         actions: [
+          // Botão de informações
           IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: _showInfoDialog,
@@ -363,15 +399,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ConnectionStatusWidget(connectionState: _connectionState),
+            // =============================================
+            // SEÇÃO DE STATUS DE CONEXÃO
+            // =============================================
+            _buildConnectionStatus(),
+            
             const SizedBox(height: 24),
             
+            // =============================================
+            // BOTÃO PRINCIPAL DE CONEXÃO/DESCONEXÃO
+            // =============================================
             if (_connectionState.isConnected)
+              // Botão de desconexão (quando conectado)
               ElevatedButton.icon(
                 icon: const Icon(Icons.link_off),
                 label: const Text('Desconectar'),
                 onPressed: () async {
-                  await _connectionService.sendDisconnectSignal();
                   await _connectionService.disconnect();
                 },
                 style: ElevatedButton.styleFrom(
@@ -382,6 +425,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               )
             else
+              // Botão de conexão (quando desconectado)
               ElevatedButton.icon(
                 icon: const Icon(Icons.wifi_tethering_rounded),
                 label: const Text('Conectar na Rede'),
@@ -395,6 +439,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             
             const SizedBox(height: 8),
+            
+            // Texto informativo sobre tipos de conexão
             if (!_connectionState.isConnected)
               const Text(
                 'Use para Wi-Fi ou Ancoragem USB (USB Tethering).',
@@ -403,31 +449,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
 
             const SizedBox(height: 16),
-
-            ElevatedButton.icon(
-              icon: Icon(Icons.bluetooth, color: Theme.of(context).colorScheme.onPrimary),
-              label: const Text('Conectar via Bluetooth'),
-              onPressed: _connectionState.isConnected ? null : _showBluetoothConnectionDialog,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (!_connectionState.isConnected)
-              const Text(
-                'Busca automática por dispositivos BLE e pareados.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-
-            const SizedBox(height: 16),
             const Divider(),
 
             const SizedBox(height: 16),
 
+            // =============================================
+            // BOTÃO DE SELEÇÃO DE LAYOUT
+            // =============================================
             OutlinedButton.icon(
               icon: const Icon(Icons.tune),
               label: const Text('Selecionar Layout do Controle'),
@@ -442,6 +470,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             
             const SizedBox(height: 16),
 
+            // =============================================
+            // BOTÃO PARA TELA DO CONTROLE
+            // =============================================
             ElevatedButton.icon(
               onPressed: _goToGamepad,
               icon: const Icon(Icons.sports_esports),
@@ -454,14 +485,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
 
+            // =============================================
+            // MENSAGEM INFORMATIVA (APENAS DESCONECTADO)
+            // =============================================
             if (!_connectionState.isConnected) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withAlpha(25),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  border: Border.all(color: Colors.orange.withAlpha(76)),
                 ),
                 child: Row(
                   children: [
@@ -481,12 +515,5 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _connectionService.dispose();
-    super.dispose();
   }
 }

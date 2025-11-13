@@ -220,12 +220,14 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
           height: 50,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.9),
+            // CORREÇÃO: Substituição de withOpacity por withAlpha
+            color: Colors.orange.withAlpha((255 * 0.9).round()),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.orange, width: 2),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.4),
+                // CORREÇÃO: Substituição de withOpacity por withAlpha
+                color: Colors.black.withAlpha((255 * 0.4).round()),
                 blurRadius: 8,
               )
             ],
@@ -336,7 +338,8 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
                 border: Border.all(color: Colors.greenAccent, width: 2),
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
-                  BoxShadow(color: Colors.greenAccent.withOpacity(0.3), blurRadius: 4)
+                  // CORREÇÃO: Substituição de withOpacity por withAlpha
+                  BoxShadow(color: Colors.greenAccent.withAlpha((255 * 0.3).round()), blurRadius: 4)
                 ]
               )
             : null,
