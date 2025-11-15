@@ -16,6 +16,11 @@ class GamepadStateService with ChangeNotifier {
   bool _hasNewInput = false;
   bool get hasNewInput => _hasNewInput;
 
+  /// Aplica uma zona morta para filtrar o ruído do sensor
+  double _applyDeadzone(double value, {double threshold = 0.05}) {
+    return value.abs() < threshold ? 0.0 : value;
+  }
+
   void initialize() {
     for (final type in ButtonType.values) {
       buttonStates[type] = false;
@@ -60,9 +65,10 @@ class GamepadStateService with ChangeNotifier {
 
   void updateGyroState(SensorData gyroData, bool isEnabled) {
     if (isEnabled) {
-      gyroX = gyroData.x; 
-      gyroY = gyroData.y; 
-      gyroZ = gyroData.z;
+      // Aplica a zona morta aos valores
+      gyroX = _applyDeadzone(gyroData.x); 
+      gyroY = _applyDeadzone(gyroData.y); 
+      gyroZ = _applyDeadzone(gyroData.z);
     } else {
       gyroX = 0.0; gyroY = 0.0; gyroZ = 0.0;
     }
@@ -71,9 +77,10 @@ class GamepadStateService with ChangeNotifier {
 
   void updateAccelState(SensorData accelData, bool isEnabled) {
      if (isEnabled) {
-      accelX = accelData.x; 
-      accelY = accelData.y; 
-      accelZ = accelData.z;
+      // Aplica a zona morta aos valores
+      accelX = _applyDeadzone(accelData.x); 
+      accelY = _applyDeadzone(accelData.y); 
+      accelZ = _applyDeadzone(accelData.z);
     } else {
       accelX = 0.0; accelY = 0.0; accelZ = 0.0;
     }

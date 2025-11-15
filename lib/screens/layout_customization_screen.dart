@@ -74,8 +74,14 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
         title: const Text('Resetar Layout?'),
         content: const Text('Isso retornará todos os botões às suas posições e tamanhos padrão.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Resetar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false), 
+            child: const Text('Cancelar')
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true), 
+            child: const Text('Resetar')
+          ),
         ],
       ),
     );
@@ -113,7 +119,7 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('Editar ${config.element.name}'),
+              title: Text('Editar ${_getElementName(config.element)}'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -151,7 +157,10 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx), 
+                  child: const Text('Cancelar')
+                ),
                 TextButton(
                   onPressed: () {
                     setState(() {
@@ -221,13 +230,13 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             // CORREÇÃO: Substituição de withOpacity por withAlpha
-            color: Colors.orange.withAlpha((255 * 0.9).round()),
+            color: Colors.orange.withAlpha(230), // ~90% opacity
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.orange, width: 2),
             boxShadow: [
               BoxShadow(
                 // CORREÇÃO: Substituição de withOpacity por withAlpha
-                color: Colors.black.withAlpha((255 * 0.4).round()),
+                color: Colors.black.withAlpha(102), // ~40% opacity
                 blurRadius: 8,
               )
             ],
@@ -306,24 +315,7 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
   Widget _buildElement(ButtonLayoutConfig config, {bool isFeedback = false, bool isSelected = false}) {
     final child = Material(
       color: Colors.transparent,
-      child: switch (config.element) {
-        ConfigurableElement.analogLeft => AnalogStick(size: config.width, label: 'L', isLeft: true, onChanged: (x,y){}),
-        ConfigurableElement.analogRight => AnalogStick(size: config.width, label: 'R', isLeft: false, onChanged: (x,y){}),
-        ConfigurableElement.dpad => _buildDPad(config),
-        ConfigurableElement.actionButtons => _buildActionButtons(config),
-        ConfigurableElement.triggerLeft => _buildTriggerButton('L2', ButtonType.leftTrigger, config),
-        ConfigurableElement.triggerRight => _buildTriggerButton('R2', ButtonType.rightTrigger, config),
-        ConfigurableElement.bumperLeft => _buildShoulderButton('L1', ButtonType.leftBumper, config),
-        ConfigurableElement.bumperRight => _buildShoulderButton('R1', ButtonType.rightBumper, config),
-        ConfigurableElement.stickButtonLeft => _buildStickButton('L3', ButtonType.leftStickButton, config),
-        ConfigurableElement.stickButtonRight => _buildStickButton('R3', ButtonType.rightStickButton, config),
-        ConfigurableElement.select => _buildSystemButton('SELECT', ButtonType.select, config),
-        ConfigurableElement.start => _buildSystemButton('START', ButtonType.start, config),
-        ConfigurableElement.floatingSettingsButton => FloatingActionButton(
-          onPressed: () {},
-          child: const Icon(Icons.settings),
-        ),
-      },
+      child: _buildElementByType(config),
     );
 
     if (isFeedback) return child;
@@ -339,7 +331,10 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   // CORREÇÃO: Substituição de withOpacity por withAlpha
-                  BoxShadow(color: Colors.greenAccent.withAlpha((255 * 0.3).round()), blurRadius: 4)
+                  BoxShadow(
+                    color: Colors.greenAccent.withAlpha(76), // ~30% opacity
+                    blurRadius: 4
+                  )
                 ]
               )
             : null,
@@ -348,9 +343,86 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     );
   }
 
+  // Método auxiliar para construir elementos por tipo
+  Widget _buildElementByType(ButtonLayoutConfig config) {
+    switch (config.element) {
+      case ConfigurableElement.analogLeft:
+        return AnalogStick(
+          size: config.width, 
+          label: 'L', 
+          isLeft: true, 
+          onChanged: (x, y){}
+        );
+      case ConfigurableElement.analogRight:
+        return AnalogStick(
+          size: config.width, 
+          label: 'R', 
+          isLeft: false, 
+          onChanged: (x, y){}
+        );
+      case ConfigurableElement.dpad:
+        return _buildDPad(config);
+      case ConfigurableElement.actionButtons:
+        return _buildActionButtons(config);
+      case ConfigurableElement.triggerLeft:
+        return _buildTriggerButton('L2', config);
+      case ConfigurableElement.triggerRight:
+        return _buildTriggerButton('R2', config);
+      case ConfigurableElement.bumperLeft:
+        return _buildShoulderButton('L1', config);
+      case ConfigurableElement.bumperRight:
+        return _buildShoulderButton('R1', config);
+      case ConfigurableElement.stickButtonLeft:
+        return _buildStickButton('L3', config);
+      case ConfigurableElement.stickButtonRight:
+        return _buildStickButton('R3', config);
+      case ConfigurableElement.select:
+        return _buildSystemButton('SELECT', config);
+      case ConfigurableElement.start:
+        return _buildSystemButton('START', config);
+      case ConfigurableElement.floatingSettingsButton:
+        return FloatingActionButton(
+          onPressed: () {},
+          backgroundColor: Colors.blue,
+          child: const Icon(Icons.settings, color: Colors.white),
+        );
+    }
+  }
+
   // Métodos auxiliares para construção de elementos específicos
   Color _getTextColor(Color backgroundColor) {
     return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+  }
+
+  String _getElementName(ConfigurableElement element) {
+    switch (element) {
+      case ConfigurableElement.analogLeft:
+        return 'Analógico Esquerdo';
+      case ConfigurableElement.analogRight:
+        return 'Analógico Direito';
+      case ConfigurableElement.dpad:
+        return 'D-Pad';
+      case ConfigurableElement.actionButtons:
+        return 'Botões de Ação';
+      case ConfigurableElement.triggerLeft:
+        return 'Gatilho L2';
+      case ConfigurableElement.triggerRight:
+        return 'Gatilho R2';
+      case ConfigurableElement.bumperLeft:
+        return 'Botão L1';
+      case ConfigurableElement.bumperRight:
+        return 'Botão R1';
+      case ConfigurableElement.stickButtonLeft:
+        return 'Botão L3';
+      case ConfigurableElement.stickButtonRight:
+        return 'Botão R3';
+      case ConfigurableElement.select:
+        return 'Botão Select';
+      case ConfigurableElement.start:
+        return 'Botão Start';
+      case ConfigurableElement.floatingSettingsButton:
+        return 'Botão Configurações';
+    }
   }
 
   Widget _buildDPad(ButtonLayoutConfig config) {
@@ -360,10 +432,26 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
       height: config.height,
       child: Stack(
         children: [
-          Positioned(top: 0, left: buttonSize, child: _buildDirectionalButton(Icons.keyboard_arrow_up, buttonSize)),
-          Positioned(bottom: 0, left: buttonSize, child: _buildDirectionalButton(Icons.keyboard_arrow_down, buttonSize)),
-          Positioned(left: 0, top: buttonSize, child: _buildDirectionalButton(Icons.keyboard_arrow_left, buttonSize)),
-          Positioned(right: 0, top: buttonSize, child: _buildDirectionalButton(Icons.keyboard_arrow_right, buttonSize)),
+          Positioned(
+            top: 0, 
+            left: buttonSize, 
+            child: _buildDirectionalButton(Icons.keyboard_arrow_up, buttonSize)
+          ),
+          Positioned(
+            bottom: 0, 
+            left: buttonSize, 
+            child: _buildDirectionalButton(Icons.keyboard_arrow_down, buttonSize)
+          ),
+          Positioned(
+            left: 0, 
+            top: buttonSize, 
+            child: _buildDirectionalButton(Icons.keyboard_arrow_left, buttonSize)
+          ),
+          Positioned(
+            right: 0, 
+            top: buttonSize, 
+            child: _buildDirectionalButton(Icons.keyboard_arrow_right, buttonSize)
+          ),
         ],
       ),
     );
@@ -377,10 +465,30 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
       height: config.height,
       child: Stack(
         children: [
-          if (buttons.isNotEmpty) Positioned(top: 0, left: buttonSize, child: _buildGamepadButton(buttons[0], buttonSize)),
-          if (buttons.length > 1) Positioned(right: 0, top: buttonSize, child: _buildGamepadButton(buttons[1], buttonSize)),
-          if (buttons.length > 2) Positioned(bottom: 0, left: buttonSize, child: _buildGamepadButton(buttons[2], buttonSize)),
-          if (buttons.length > 3) Positioned(left: 0, top: buttonSize, child: _buildGamepadButton(buttons[3], buttonSize)),
+          if (buttons.isNotEmpty) 
+            Positioned(
+              top: 0, 
+              left: buttonSize, 
+              child: _buildGamepadButton(buttons[0], buttonSize)
+            ),
+          if (buttons.length > 1) 
+            Positioned(
+              right: 0, 
+              top: buttonSize, 
+              child: _buildGamepadButton(buttons[1], buttonSize)
+            ),
+          if (buttons.length > 2) 
+            Positioned(
+              bottom: 0, 
+              left: buttonSize, 
+              child: _buildGamepadButton(buttons[2], buttonSize)
+            ),
+          if (buttons.length > 3) 
+            Positioned(
+              left: 0, 
+              top: buttonSize, 
+              child: _buildGamepadButton(buttons[3], buttonSize)
+            ),
         ],
       ),
     );
@@ -422,7 +530,7 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     );
   }
 
-  Widget _buildShoulderButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
+  Widget _buildShoulderButton(String label, ButtonLayoutConfig config) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 50),
       width: config.width,
@@ -434,13 +542,17 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
       child: Center(
         child: Text(
           label,
-          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white, 
+            fontSize: 14, 
+            fontWeight: FontWeight.bold
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildTriggerButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
+  Widget _buildTriggerButton(String label, ButtonLayoutConfig config) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 50),
       width: config.width,
@@ -452,13 +564,17 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
       child: Center(
         child: Text(
           label,
-          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white, 
+            fontSize: 12, 
+            fontWeight: FontWeight.bold
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildStickButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
+  Widget _buildStickButton(String label, ButtonLayoutConfig config) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 50),
       width: config.width,
@@ -470,13 +586,17 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
       child: Center(
         child: Text(
           label,
-          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white, 
+            fontSize: 12, 
+            fontWeight: FontWeight.bold
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSystemButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
+  Widget _buildSystemButton(String label, ButtonLayoutConfig config) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 50),
       width: config.width,
@@ -488,9 +608,13 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
       child: Center(
         child: Text(
           label,
-          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white, 
+            fontSize: 10, 
+            fontWeight: FontWeight.bold
+          ),
         ),
       ),
     );
   }
-}
+} 

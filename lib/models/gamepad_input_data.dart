@@ -84,10 +84,9 @@ class GamepadInputData {
     final rawAccelY = sensors['accelY'] ?? 0.0;
     final rawAccelZ = sensors['accelZ'] ?? 0.0;
 
-    // Rotação Landscape
     final double accelXGame = -rawAccelY;
-    final double accelYGame = rawAccelX;
-    final double accelZGame = rawAccelZ;
+    final double accelYGame = -rawAccelZ;
+    final double accelZGame = rawAccelX;
 
     byteData.setInt16(14, ((accelXGame / gravity) * accelScale).round(), Endian.little);
     byteData.setInt16(16, ((accelYGame / gravity) * accelScale).round(), Endian.little);
