@@ -66,10 +66,10 @@ class GamepadInputData {
     final rawGyroY = sensors['gyroY'] ?? 0.0;
     final rawGyroZ = sensors['gyroZ'] ?? 0.0;
 
-    // Aplicando a rotação para Landscape
-    final double gyroXGame = -rawGyroY; // Y vira X invertido ou direto dependendo do lado da rotação
-    final double gyroYGame = rawGyroX;  // X vira Y
-    final double gyroZGame = rawGyroZ;  // Z (rotação da tela) se mantém
+    // Rotação Landscape (PADRÃO DSU "Y-up" - IDÊNTICO AO ACELERÔMETRO)
+    final double gyroXGame = rawGyroY; // Roll (Celular Y -> Controle X)
+    final double gyroYGame = rawGyroZ;  // Yaw (Celular Z -> Controle Y)
+    final double gyroZGame = rawGyroX;  // Pitch (Celular X -> Controle Z)
 
     // Escala para envio (x100 para precisão em int16)
     byteData.setInt16(8, (gyroXGame * 100).round(), Endian.little);
@@ -84,7 +84,7 @@ class GamepadInputData {
     final rawAccelY = sensors['accelY'] ?? 0.0;
     final rawAccelZ = sensors['accelZ'] ?? 0.0;
 
-    final double accelXGame = -rawAccelY;
+    final double accelXGame = rawAccelY;
     final double accelYGame = -rawAccelZ;
     final double accelZGame = rawAccelX;
 
