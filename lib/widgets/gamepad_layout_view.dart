@@ -14,7 +14,8 @@ class GamepadLayoutView extends StatefulWidget {
   final GamepadLayout layout;
   final bool hapticFeedbackEnabled;
   final GamepadLayoutType layoutType;
-  final VoidCallback onShowSettings; 
+  final VoidCallback onShowSettings;
+  final bool isTransparent; // NOVO CAMPO
 
   const GamepadLayoutView({
     super.key,
@@ -25,6 +26,7 @@ class GamepadLayoutView extends StatefulWidget {
     required this.hapticFeedbackEnabled,
     required this.layoutType,
     required this.onShowSettings,
+    required this.isTransparent, // Recebe no construtor
   });
 
   @override
@@ -108,6 +110,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
           size: config.width,
           label: 'L',
           isLeft: true,
+          isTransparent: widget.isTransparent, // Passa a config
           onChanged: (x, y) => _onAnalogStickChanged(true, x, y),
         );
         break;
@@ -116,6 +119,7 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
           size: config.width,
           label: 'R',
           isLeft: false,
+          isTransparent: widget.isTransparent, // Passa a config
           onChanged: (x, y) => _onAnalogStickChanged(false, x, y),
         );
         break;
@@ -149,18 +153,29 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
       case ConfigurableElement.start:
         child = _buildSystemButton('START', ButtonType.start, config);
         break;
+
+      // --- CORREÇÃO 3: REMOÇÃO DO BOTÃO AZUL ---
+      // Removemos o case ConfigurableElement.floatingSettingsButton
+      // Ou fazemos ele retornar um Container vazio caso a configuração antiga ainda exista no cache
       case ConfigurableElement.floatingSettingsButton:
-        child = FloatingActionButton(
-          onPressed: widget.onShowSettings,
-          child: const Icon(Icons.settings),
-        );
-        break;
+        return const SizedBox.shrink(); // Não desenha nada
+    }
+    
+    // Se por acaso cair num case vazio (como o floatingSettingsButton acima), 
+    // retornamos SizedBox para não quebrar o Stack
+    // (Mas o ideal é o código acima com break e atribuição de child, 
+    // ou return direto no case. Como o switch original atribuía à variável 'child',
+    // precisamos garantir que 'child' tenha valor ou retornar aqui).
+    
+    // Ajuste para garantir compilação segura:
+    if (config.element == ConfigurableElement.floatingSettingsButton) {
+        return const SizedBox.shrink();
     }
 
     return Positioned(
       left: config.x * screenSize.width,
       top: config.y * screenSize.height,
-      child: child,
+      child: child, // A variável child definida no switch acima
     );
   }
 
@@ -205,9 +220,19 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
 
   Widget _buildGamepadButton(GamepadButton button, double size) {
     final isPressed = widget.gamepadState.buttonStates[button.type] ?? false;
+    
+    final Color baseColor = Color(button.color);
+    
+    final Color fillColor = widget.isTransparent 
+        ? (isPressed ? baseColor.withOpacity(0.3) : Colors.transparent)
+        : baseColor;
+        
+    final Color borderColor = widget.isTransparent 
+        ? baseColor.withOpacity(0.8)
+        : Colors.white;
+
     return GestureDetector(
-      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
-      onPanStart: (_) => _onButtonPressed(button.type),
+      onPanStart: (details) => _onButtonPressed(button.type),
       onPanEnd: (_) => _onButtonReleased(button.type),
       onPanCancel: () => _onButtonReleased(button.type),
       child: AnimatedContainer(
@@ -215,25 +240,21 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: Color(button.color),
+          color: fillColor,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-          boxShadow: isPressed ? [] : [
-            BoxShadow(
-              color: Colors.black.withAlpha(77),
-              blurRadius: 4,
-              offset: const Offset(0, 2)
-            )
+          border: Border.all(color: borderColor, width: 2),
+          boxShadow: (isPressed || widget.isTransparent) ? [] : [
+             BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2))
           ],
         ),
         child: Center(
           child: Text(
             button.label,
             style: TextStyle(
-              color: _getTextColor(Color(button.color)),
+              color: widget.isTransparent ? borderColor : _getTextColor(baseColor),
               fontWeight: FontWeight.bold,
               fontSize: size * 0.4
-            )
+            ),
           ),
         ),
       ),
@@ -242,9 +263,19 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
   
   Widget _buildDirectionalButton(IconData icon, ButtonType buttonType, double size) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
+    
+    // Lógica de Transparência para D-Pad
+    final Color baseColor = Colors.grey.shade800;
+    final Color fillColor = widget.isTransparent 
+        ? (isPressed ? baseColor.withOpacity(0.3) : Colors.transparent)
+        : (isPressed ? Colors.grey.shade600 : baseColor);
+    final Color borderColor = widget.isTransparent 
+        ? baseColor.withOpacity(0.8)
+        : Colors.white;
+    final Color iconColor = widget.isTransparent ? borderColor : Colors.white;
+
     return GestureDetector(
-      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
-      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanStart: (details) => _onButtonPressed(buttonType),
       onPanEnd: (_) => _onButtonReleased(buttonType),
       onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
@@ -252,19 +283,30 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: isPressed ? Colors.grey.shade600 : Colors.grey.shade800,
+          color: fillColor,
           borderRadius: BorderRadius.circular(8),
+          border: widget.isTransparent ? Border.all(color: borderColor, width: 1.5) : null,
         ),
-        child: Icon(icon, color: Colors.white, size: size * 0.6),
+        child: Icon(icon, color: iconColor, size: size * 0.6),
       ),
     );
   }
 
   Widget _buildShoulderButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
+    
+    // Lógica de Transparência para Shoulder Buttons
+    final Color baseColor = Colors.grey.shade800;
+    final Color fillColor = widget.isTransparent 
+        ? (isPressed ? baseColor.withOpacity(0.3) : Colors.transparent)
+        : (isPressed ? Colors.grey.shade600 : baseColor);
+    final Color borderColor = widget.isTransparent 
+        ? baseColor.withOpacity(0.8)
+        : Colors.white;
+    final Color textColor = widget.isTransparent ? borderColor : Colors.white;
+
     return GestureDetector(
-      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
-      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanStart: (details) => _onButtonPressed(buttonType),
       onPanEnd: (_) => _onButtonReleased(buttonType),
       onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
@@ -272,14 +314,15 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
         width: config.width,
         height: config.height,
         decoration: BoxDecoration(
-          color: isPressed ? Colors.grey.shade600 : Colors.grey.shade800,
+          color: fillColor,
           borderRadius: BorderRadius.circular(12),
+          border: widget.isTransparent ? Border.all(color: borderColor, width: 1.5) : null,
         ),
         child: Center(
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: textColor,
               fontSize: 14,
               fontWeight: FontWeight.bold
             )
@@ -291,9 +334,19 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
 
   Widget _buildTriggerButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
+    
+    // Lógica de Transparência para Trigger Buttons
+    final Color baseColor = Colors.grey.shade700;
+    final Color fillColor = widget.isTransparent 
+        ? (isPressed ? baseColor.withOpacity(0.3) : Colors.transparent)
+        : (isPressed ? Colors.grey.shade500 : baseColor);
+    final Color borderColor = widget.isTransparent 
+        ? baseColor.withOpacity(0.8)
+        : Colors.white;
+    final Color textColor = widget.isTransparent ? borderColor : Colors.white;
+
     return GestureDetector(
-      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
-      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanStart: (details) => _onButtonPressed(buttonType),
       onPanEnd: (_) => _onButtonReleased(buttonType),
       onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
@@ -301,14 +354,15 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
         width: config.width,
         height: config.height,
         decoration: BoxDecoration(
-          color: isPressed ? Colors.grey.shade500 : Colors.grey.shade700,
+          color: fillColor,
           borderRadius: BorderRadius.circular(10),
+          border: widget.isTransparent ? Border.all(color: borderColor, width: 1.5) : null,
         ),
         child: Center(
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: textColor,
               fontSize: 12,
               fontWeight: FontWeight.bold
             )
@@ -320,9 +374,20 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
 
   Widget _buildStickButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
+    
+    // Lógica de Transparência para Stick Buttons
+    final Color baseColor = Colors.grey.shade800;
+    final Color pressedColor = Colors.blue.shade600;
+    final Color fillColor = widget.isTransparent 
+        ? (isPressed ? pressedColor.withOpacity(0.3) : Colors.transparent)
+        : (isPressed ? pressedColor : baseColor);
+    final Color borderColor = widget.isTransparent 
+        ? baseColor.withOpacity(0.8)
+        : Colors.white;
+    final Color textColor = widget.isTransparent ? borderColor : Colors.white;
+
     return GestureDetector(
-      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
-      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanStart: (details) => _onButtonPressed(buttonType),
       onPanEnd: (_) => _onButtonReleased(buttonType),
       onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
@@ -330,14 +395,15 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
         width: config.width,
         height: config.height,
         decoration: BoxDecoration(
-          color: isPressed ? Colors.blue.shade600 : Colors.grey.shade800,
+          color: fillColor,
           shape: BoxShape.circle,
+          border: widget.isTransparent ? Border.all(color: borderColor, width: 1.5) : null,
         ),
         child: Center(
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: textColor,
               fontSize: 12,
               fontWeight: FontWeight.bold
             )
@@ -349,9 +415,19 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
 
   Widget _buildSystemButton(String label, ButtonType buttonType, ButtonLayoutConfig config) {
     final isPressed = widget.gamepadState.buttonStates[buttonType] ?? false;
+    
+    // Lógica de Transparência para System Buttons
+    final Color baseColor = Colors.grey.shade800;
+    final Color fillColor = widget.isTransparent 
+        ? (isPressed ? baseColor.withOpacity(0.3) : Colors.transparent)
+        : (isPressed ? Colors.grey.shade600 : baseColor);
+    final Color borderColor = widget.isTransparent 
+        ? baseColor.withOpacity(0.8)
+        : Colors.white;
+    final Color textColor = widget.isTransparent ? borderColor : Colors.white;
+
     return GestureDetector(
-      // --- MELHORIA: USO DE onPan PARA TRAVAR BOTÃO AO ARRASTAR ---
-      onPanStart: (_) => _onButtonPressed(buttonType),
+      onPanStart: (details) => _onButtonPressed(buttonType),
       onPanEnd: (_) => _onButtonReleased(buttonType),
       onPanCancel: () => _onButtonReleased(buttonType),
       child: AnimatedContainer(
@@ -359,14 +435,15 @@ class _GamepadLayoutViewState extends State<GamepadLayoutView> {
         width: config.width,
         height: config.height,
         decoration: BoxDecoration(
-          color: isPressed ? Colors.grey.shade600 : Colors.grey.shade800,
+          color: fillColor,
           borderRadius: BorderRadius.circular(20),
+          border: widget.isTransparent ? Border.all(color: borderColor, width: 1.5) : null,
         ),
         child: Center(
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: textColor,
               fontSize: 10,
               fontWeight: FontWeight.bold
             )

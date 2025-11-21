@@ -4,14 +4,12 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:gamepadvirtual/models/connection_state.dart' as models;
 import 'package:gamepadvirtual/screens/layout_selection_screen.dart';
 import 'package:gamepadvirtual/screens/gamepad_screen.dart';
+import 'package:gamepadvirtual/screens/streaming_settings_screen.dart';
 import 'package:gamepadvirtual/services/connection_service.dart';
 import 'package:gamepadvirtual/widgets/connection_status.dart';
+// ADICIONE ESTE IMPORT
+import 'package:gamepadvirtual/services/gamepad_input_service.dart'; 
 
-// =============================================
-// TELA PRINCIPAL DO APLICATIVO
-// =============================================
-
-/// Tela inicial com opções de conexão e navegação
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -20,44 +18,32 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  // =============================================
-  // SERVIÇOS E ESTADO
-  // =============================================
-  
-  /// Serviço de gerenciamento de conexões
   final ConnectionService _connectionService = ConnectionService();
+  // ADICIONE O SERVIÇO DE INPUT
+  final GamepadInputService _gamepadInputService = GamepadInputService(); 
   
-  /// Estado atual da conexão
   models.ConnectionState _connectionState = models.ConnectionState.disconnected();
-  
-  /// Timer para verificação periódica da conexão
   Timer? _connectionCheckTimer;
-
-  // =============================================
-  // INICIALIZAÇÃO E CICLO DE VIDA
-  // =============================================
 
   @override
   void initState() {
     super.initState();
-    
-    // Registra observer do ciclo de vida do app
     WidgetsBinding.instance.addObserver(this);
     
-    // Escuta mudanças no estado da conexão
+    // --- CORREÇÃO 1: INICIALIZAR DETECÇÃO DE GAMEPAD GLOBALMENTE ---
+    _gamepadInputService.initialize(); 
+    // ---------------------------------------------------------------
+
     _connectionService.connectionStateStream.listen((state) {
       if (mounted) setState(() => _connectionState = state);
     });
     
-    // Escuta mensagens do sistema (servidor cheio, etc)
     _connectionService.systemMessageStream.listen(_handleSystemMessage);
     
-    // Inicializa com estado atual
     setState(() {
       _connectionState = _connectionService.currentState;
     });
 
-    // Configura verificação periódica da conexão
     _connectionCheckTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       _connectionService.checkConnectionStatus();
     });
@@ -65,7 +51,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    // Limpa recursos
     _connectionCheckTimer?.cancel();
     _connectionCheckTimer = null;
     WidgetsBinding.instance.removeObserver(this);
@@ -73,26 +58,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // =============================================
-  // GERENCIAMENTO DO CICLO DE VIDA DO APP
-  // =============================================
-
-  /// Chamado quando o estado do app muda (background/foreground)
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Quando o app volta ao foreground, verifica o status da conexão
       _connectionService.checkConnectionStatus();
     }
   }
 
-  // =============================================
-  // TRATAMENTO DE MENSAGENS DO SISTEMA
-  // =============================================
-
-  /// Processa mensagens recebidas do servidor
   void _handleSystemMessage(String code) {
-    // Usa o context diretamente sem async gap
     if (code == 'server_full') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -107,11 +80,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // =============================================
-  // DIALOGOS E MODAIS INFORMATIVOS
-  // =============================================
-
-  /// Exibe informações sobre download do servidor PC
   void _showInfoDialog() {
     final Uri serverUrl = Uri.parse('https://github.com/KaleoNabor/GamePadVirtual-Desktop/releases/');
 
@@ -125,7 +93,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Informações sobre o servidor
                 const Text(
                   'Para usar este aplicativo, você precisa do servidor rodando no seu PC. '
                   'Baixe a versão mais recente do servidor no link abaixo:',
@@ -133,7 +100,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
                 
-                // Link para download
                 InkWell(
                   onTap: () => _launchUrl(serverUrl),
                   child: Container(
@@ -163,7 +129,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
                 
-                // Instruções de uso
                 const Text(
                   'Instruções:',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -191,20 +156,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Lança URL externa com tratamento seguro de contexto
   Future<void> _launchUrl(Uri url) async {
     try {
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
-        // CORREÇÃO: Verificação de mounted após async gap
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Não foi possível abrir o link.')),
         );
       }
     } catch (e) {
-      // CORREÇÃO: Verificação de mounted após async gap
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erro ao abrir o link.')),
@@ -212,16 +174,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // =============================================
-  // DESCOBERTA E SELEÇÃO DE SERVIDORES
-  // =============================================
-
-  /// Busca servidores na rede local e exibe modal de seleção
   void _discoverAndShowServers() {
-    // Inicia descoberta de servidores
     _connectionService.discoverServers();
 
-    // Exibe modal com servidores encontrados
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -243,7 +198,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Cabeçalho do modal
                   Text(
                     'Servidores Encontrados',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -254,7 +208,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 16),
                   
-                  // Lista de servidores ou indicador de carregamento
                   if (snapshot.connectionState == ConnectionState.waiting || servers.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24.0),
@@ -270,7 +223,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     )
                   else
-                    // Lista de servidores encontrados
                     Flexible(
                       child: ListView.builder(
                         shrinkWrap: true,
@@ -295,19 +247,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       },
     ).whenComplete(() {
-      // Para descoberta quando modal é fechado
       _connectionService.stopDiscovery();
     });
   }
 
-  /// Conecta a um servidor com tratamento seguro de contexto
   Future<void> _connectToServer(DiscoveredServer server) async {
-    // Fecha o modal primeiro
     Navigator.of(context).pop();
     
     final success = await _connectionService.connectToServer(server);
     
-    // CORREÇÃO: Verificação de mounted após async gap
     if (!mounted) return;
     
     if (!success) {
@@ -321,11 +269,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // =============================================
-  // NAVEGAÇÃO ENTRE TELAS
-  // =============================================
-
-  /// Navega para a tela do gamepad
   void _goToGamepad() {
     Navigator.push(
       context,
@@ -333,7 +276,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Navega para seleção de layout
   void _goToLayoutSelection() {
     Navigator.push(
       context,
@@ -341,27 +283,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // =============================================
-  // WIDGET DE STATUS DE CONEXÃO CENTRALIZADO
-  // =============================================
-
-  /// Constroi o widget de status de conexão centralizado
   Widget _buildConnectionStatus() {
     return Container(
-      width: double.infinity, // Ocupa toda a largura disponível
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Widget de status principal
           ConnectionStatusWidget(
             connectionState: _connectionState,
             showDetails: true,
           ),
           const SizedBox(height: 8),
           
-          // Texto auxiliar quando desconectado
           if (!_connectionState.isConnected)
             const Text(
               'Conecte-se a um servidor para começar',
@@ -376,17 +311,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // =============================================
-  // CONSTRUÇÃO DA INTERFACE PRINCIPAL
-  // =============================================
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('GamePadVirtual'),
         actions: [
-          // Botão de informações
           IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: _showInfoDialog,
@@ -399,18 +329,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // =============================================
-            // SEÇÃO DE STATUS DE CONEXÃO
-            // =============================================
             _buildConnectionStatus(),
             
             const SizedBox(height: 24),
             
-            // =============================================
-            // BOTÃO PRINCIPAL DE CONEXÃO/DESCONEXÃO
-            // =============================================
             if (_connectionState.isConnected)
-              // Botão de desconexão (quando conectado)
               ElevatedButton.icon(
                 icon: const Icon(Icons.link_off),
                 label: const Text('Desconectar'),
@@ -425,7 +348,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               )
             else
-              // Botão de conexão (quando desconectado)
               ElevatedButton.icon(
                 icon: const Icon(Icons.wifi_tethering_rounded),
                 label: const Text('Conectar na Rede'),
@@ -440,7 +362,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             
             const SizedBox(height: 8),
             
-            // Texto informativo sobre tipos de conexão
             if (!_connectionState.isConnected)
               const Text(
                 'Use para Wi-Fi ou Ancoragem USB (USB Tethering).',
@@ -453,9 +374,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
             const SizedBox(height: 16),
 
-            // =============================================
-            // BOTÃO DE SELEÇÃO DE LAYOUT
-            // =============================================
+            OutlinedButton.icon(
+              icon: const Icon(Icons.settings_display),
+              label: const Text('Configurações de Transmissão'),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const StreamingSettingsScreen()),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontSize: 16),
+                side: BorderSide(color: Theme.of(context).colorScheme.outline),
+                foregroundColor: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+
             OutlinedButton.icon(
               icon: const Icon(Icons.tune),
               label: const Text('Selecionar Layout do Controle'),
@@ -470,9 +407,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             
             const SizedBox(height: 16),
 
-            // =============================================
-            // BOTÃO PARA TELA DO CONTROLE
-            // =============================================
             ElevatedButton.icon(
               onPressed: _goToGamepad,
               icon: const Icon(Icons.sports_esports),
@@ -485,9 +419,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
 
-            // =============================================
-            // MENSAGEM INFORMATIVA (APENAS DESCONECTADO)
-            // =============================================
             if (!_connectionState.isConnected) ...[
               const SizedBox(height: 16),
               Container(

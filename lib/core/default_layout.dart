@@ -59,10 +59,5 @@ final List<ButtonLayoutConfig> defaultGamepadLayout = [
     x: 0.5375, y: 0.19, width: 80, height: 25
   ),
   //endregion
-  //region Botões Flutuantes
-  ButtonLayoutConfig(
-    element: ConfigurableElement.floatingSettingsButton,
-    x: 0.92, y: 0.85, width: 56, height: 56
-  ),
-  //endregion
+  // Botão flutuante de configurações REMOVIDO
 ];

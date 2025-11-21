@@ -16,8 +16,11 @@ environment:
 
 # Dependências de produção do projeto
 dependencies:
+  # Biblioteca para comunicação em tempo real via WebRTC
+  flutter_webrtc: ^0.12.5
+
   # Mantém a tela ativa
-  wakelock_plus: ^1.1.0
+  wakelock_plus: ^1.4.0
   
   # Framework principal
   flutter:
@@ -62,7 +65,7 @@ dev_dependencies:
   # Regras de lint para análise de código
   flutter_lints: ^5.0.0
   # Geração de ícones do aplicativo
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.4
 
 # Configurações específicas do Flutter
 flutter:

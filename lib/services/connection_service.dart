@@ -103,6 +103,7 @@ class ConnectionService {
   final _discoveredServersController = StreamController<List<DiscoveredServer>>.broadcast();
   final _discoveredBleDevicesController = StreamController<List<DiscoveredBluetoothDevice>>.broadcast();
   final _unifiedBluetoothDevicesController = StreamController<List<DiscoveredBluetoothDevice>>.broadcast();
+  final _signalingController = StreamController<Map<String, dynamic>>.broadcast();
 
   // =============================================
   // ESTADO INTERNO E GERENCIAMENTO DE CONEXÕES
@@ -160,8 +161,8 @@ class ConnectionService {
   /// Timestamp do último dado recebido
   DateTime? _lastDataReceivedTime;
   
-  /// Flag de controle do watchdog
-  
+  /// Buffer para dados TCP parciais
+  final StringBuffer _tcpBuffer = StringBuffer();
 
   // CORREÇÃO: Flag para prevenir chamadas múltiplas de desconexão (race condition)
   bool _isDisconnecting = false;
@@ -194,8 +195,110 @@ class ConnectionService {
   /// Stream unificado de dispositivos Bluetooth
   Stream<List<DiscoveredBluetoothDevice>> get unifiedBluetoothDevicesStream => _unifiedBluetoothDevicesController.stream;
   
+  /// Stream para mensagens de sinalização WebRTC
+  Stream<Map<String, dynamic>> get signalingStream => _signalingController.stream;
+  
   /// Estado atual da conexão
   ConnectionState get currentState => _currentState;
+
+  // =============================================
+  // SINALIZAÇÃO WEBRTC
+  // =============================================
+
+  /// Envia mensagem JSON de sinalização via TCP
+  void sendSignalingMessage(Map<String, dynamic> message) {
+    if (_tcpSocket != null) {
+      try {
+        final jsonStr = jsonEncode(message);
+        // O prefixo JSON: é o que o C++ usa para quebrar as mensagens
+        final bytes = utf8.encode("JSON:$jsonStr"); 
+        _tcpSocket!.add(bytes);
+        // Flush garante que o pacote saia imediatamente
+        _tcpSocket!.flush(); 
+      } catch (e) {
+        debugPrint("Erro ao enviar sinalização: $e");
+      }
+    }
+  }
+
+  /// Processa dados recebidos do TCP para sinalização
+  void _handleTcpData(List<int> data) {
+    try {
+      final message = utf8.decode(data, allowMalformed: true);
+      _tcpBuffer.write(message);
+      
+      final bufferContent = _tcpBuffer.toString();
+      final jsonMessages = bufferContent.split('JSON:');
+      
+      // Processa cada mensagem JSON encontrada
+      for (int i = 1; i < jsonMessages.length; i++) {
+        final jsonStr = jsonMessages[i];
+        try {
+          // Tenta encontrar o fim do JSON
+          final jsonEnd = _findJsonEnd(jsonStr);
+          if (jsonEnd != -1) {
+            final completeJson = jsonStr.substring(0, jsonEnd);
+            final remaining = jsonStr.substring(jsonEnd);
+            
+            final jsonData = jsonDecode(completeJson);
+            _signalingController.add(Map<String, dynamic>.from(jsonData));
+            debugPrint("Sinalização recebida: ${jsonData['type']}");
+            
+            // Atualiza buffer com dados restantes
+            _tcpBuffer.clear();
+            if (remaining.isNotEmpty) {
+              _tcpBuffer.write(remaining);
+            }
+          }
+        } catch (e) {
+          // JSON incompleto, mantém no buffer
+          debugPrint("JSON incompleto, aguardando mais dados...");
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro ao processar dados TCP: $e");
+      _tcpBuffer.clear();
+    }
+  }
+
+  /// Encontra o fim de um objeto JSON
+  int _findJsonEnd(String jsonStr) {
+    int braceCount = 0;
+    bool inString = false;
+    bool escaped = false;
+    
+    for (int i = 0; i < jsonStr.length; i++) {
+      final char = jsonStr[i];
+      
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      
+      if (char == '\\') {
+        escaped = true;
+        continue;
+      }
+      
+      if (char == '"') {
+        inString = !inString;
+        continue;
+      }
+      
+      if (!inString) {
+        if (char == '{') {
+          braceCount++;
+        } else if (char == '}') {
+          braceCount--;
+          if (braceCount == 0) {
+            return i + 1;
+          }
+        }
+      }
+    }
+    
+    return -1; // JSON incompleto
+  }
 
   // =============================================
   // DESCOBERTA DE SERVIDORES NA REDE
@@ -264,6 +367,18 @@ class ConnectionService {
       
       _serverAddress = server.ipAddress;
       
+      // Configura listener para dados TCP (incluindo sinalização)
+      _tcpSocket!.listen((List<int> data) {
+        _lastDataReceivedTime = DateTime.now();
+        _handleTcpData(data);
+      }, onError: (e) {
+        debugPrint("Erro no socket TCP: $e");
+        disconnect();
+      }, onDone: () {
+        debugPrint("Socket TCP fechado pelo servidor");
+        disconnect();
+      });
+
       // CORREÇÃO: Handlers de 'done' e 'error' precisam ser robustos
       _tcpSocket!.done.then((_) {
         debugPrint("Socket.done (TCP) recebido. Disparando desconexão.");
@@ -542,6 +657,32 @@ class ConnectionService {
   }
 
   // =============================================
+  // ENVIO DE DADOS DO MOUSE
+  // =============================================
+
+  /// Envia dados de movimento do mouse via UDP
+  /// Protocolo simples: [0x02 (Header)] [DX (Int16)] [DY (Int16)] [Buttons (Byte)]
+  void sendMouseData(int dx, int dy, {bool leftClick = false, bool rightClick = false}) {
+    if (!_currentState.isConnected || _udpSocket == null || _serverAddress == null) return;
+
+    try {
+      final bytes = ByteData(6);
+      bytes.setUint8(0, 0x02); // 0x02 = Header de Mouse (diferente do gamepad que é implicitamente 0x00/struct)
+      bytes.setInt16(1, dx, Endian.little);
+      bytes.setInt16(3, dy, Endian.little);
+      
+      int buttons = 0;
+      if (leftClick) buttons |= 1;
+      if (rightClick) buttons |= 2;
+      bytes.setUint8(5, buttons);
+
+      _udpSocket!.send(bytes.buffer.asUint8List(), _serverAddress!, DATA_PORT_UDP);
+    } catch (e) {
+      debugPrint("Erro enviando mouse: $e");
+    }
+  }
+
+  // =============================================
   // ESCUTA DE VIBRAÇÃO VIA UDP
   // =============================================
 
@@ -630,6 +771,9 @@ class ConnectionService {
     _keepAliveTimer?.cancel();
     _keepAliveTimer = null;
     _lastDataReceivedTime = null;
+    
+    // Limpa buffer TCP
+    _tcpBuffer.clear();
     
     // Para descobertas
     stopDiscovery();
@@ -725,6 +869,7 @@ class ConnectionService {
     _discoveredServersController.close();
     _discoveredBleDevicesController.close();
     _unifiedBluetoothDevicesController.close();
+    _signalingController.close();
     _scanSubscription?.cancel();
   }
 }

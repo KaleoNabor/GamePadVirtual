@@ -102,6 +102,49 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
     }
   }
 
+  // --- NOVO MÉTODO: Diálogo de Gerenciamento de Visibilidade ---
+  void _showVisibilityManager() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: const Text('Gerenciar Elementos'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _layoutConfig!.length,
+                  itemBuilder: (context, index) {
+                    final config = _layoutConfig![index];
+                    return SwitchListTile(
+                      title: Text(_getElementName(config.element)),
+                      value: config.isVisible,
+                      onChanged: (bool value) {
+                        setModalState(() {
+                          _layoutConfig![index] = config.copyWith(isVisible: value);
+                        });
+                        // Atualiza a tela principal também
+                        setState(() {});
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Concluir'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   // Diálogo para editar propriedades dos elementos
   void _showPropertiesDialog() {
     if (_selectedElement == null) return;
@@ -229,13 +272,11 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
           height: 50,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            // CORREÇÃO: Substituição de withOpacity por withAlpha
             color: Colors.orange.withAlpha(230), // ~90% opacity
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.orange, width: 2),
             boxShadow: [
               BoxShadow(
-                // CORREÇÃO: Substituição de withOpacity por withAlpha
                 color: Colors.black.withAlpha(102), // ~40% opacity
                 blurRadius: 8,
               )
@@ -251,6 +292,15 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
                 onPressed: () => Navigator.pop(context),
               ),
               const VerticalDivider(color: Colors.white24, indent: 10, endIndent: 10),
+              
+              // --- NOVO BOTÃO: GERENCIAR VISIBILIDADE ---
+              IconButton(
+                icon: const Icon(Icons.visibility),
+                color: Colors.white,
+                tooltip: 'Mostrar/Ocultar Botões',
+                onPressed: _showVisibilityManager,
+              ),
+              
               IconButton(
                 icon: const Icon(Icons.tune),
                 color: _selectedElement != null ? Colors.white : Colors.white54,
@@ -330,7 +380,6 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
                 border: Border.all(color: Colors.greenAccent, width: 2),
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
-                  // CORREÇÃO: Substituição de withOpacity por withAlpha
                   BoxShadow(
                     color: Colors.greenAccent.withAlpha(76), // ~30% opacity
                     blurRadius: 4
@@ -617,4 +666,4 @@ class _LayoutCustomizationScreenState extends State<LayoutCustomizationScreen> {
       ),
     );
   }
-} 
+}

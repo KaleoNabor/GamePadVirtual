@@ -1,4 +1,4 @@
-package com.example.gamepadvirtual
+package com.kaleoideias.gamepadvirtual
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -181,7 +181,7 @@ class DiscoveryService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("GamePadVirtual")
             .setContentText("Procurando servidor na rede...")
-            .setSmallIcon(R.drawable.ic_stat_name) // Você precisará criar este ícone
+            .setSmallIcon(R.mipmap.ic_launcher) // Você precisará criar este ícone
             .addAction(0, "Parar", pendingStopIntent)
             .setOngoing(true)
             .build()

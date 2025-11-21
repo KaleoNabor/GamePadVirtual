@@ -1,4 +1,4 @@
-package com.example.gamepadvirtual
+package com.kaleoideias.gamepadvirtual
 
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver

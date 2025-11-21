@@ -16,11 +16,18 @@ class StorageService {
   static const String _accelerometerEnabledKey = 'accelerometer_enabled';
   static const String _externalDigitalTriggersKey = 'external_digital_triggers';
   static const String _customLayoutBaseKey = 'custom_layout_base';
+  static const String _audioEnabledKey = 'audio_enabled'; // NOVA CHAVE
 
   // Chaves separadas para layouts customizados por tipo
   static const String _customLayoutKey_Xbox = 'custom_layout_config_xbox';
   static const String _customLayoutKey_PlayStation = 'custom_layout_config_playstation';
   static const String _customLayoutKey_Nintendo = 'custom_layout_config_nintendo';
+
+  // --- NOVAS CHAVES PARA CONFIGURAÇÕES DE STREAMING ---
+  static const String _buttonStyleKey = 'button_style_transparent';
+  static const String _touchpadEnabledKey = 'touchpad_enabled';
+  static const String _mouseSensitivityKey = 'mouse_sensitivity';
+  static const String _viewModeImmersiveKey = 'view_mode_immersive';
 
   // Métodos para gerenciamento de layout selecionado
   Future<GamepadLayoutType> getSelectedLayout() async {
@@ -108,6 +115,63 @@ class StorageService {
   Future<void> setExternalDigitalTriggersEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_externalDigitalTriggersKey, enabled);
+  }
+
+  // --- CONFIGURAÇÃO DE ÁUDIO ---
+  Future<bool> isAudioEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_audioEnabledKey) ?? true; // PADRÃO TRUE (LIGADO)
+  }
+
+  Future<void> setAudioEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_audioEnabledKey, enabled);
+  }
+
+  // --- NOVAS CONFIGURAÇÕES DE STREAMING ---
+
+  // Estilo dos Botões (false = Sólido, true = Transparente)
+  Future<bool> isButtonStyleTransparent() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_buttonStyleKey) ?? true; // Padrão Transparente
+  }
+
+  Future<void> setButtonStyleTransparent(bool transparent) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_buttonStyleKey, transparent);
+  }
+
+  // Touchpad
+  Future<bool> isTouchpadEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_touchpadEnabledKey) ?? false;
+  }
+
+  Future<void> setTouchpadEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_touchpadEnabledKey, enabled);
+  }
+
+  // Sensibilidade do Mouse (1.0 a 5.0)
+  Future<double> getMouseSensitivity() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(_mouseSensitivityKey) ?? 2.0;
+  }
+
+  Future<void> setMouseSensitivity(double value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_mouseSensitivityKey, value);
+  }
+
+  // Modo de Visualização (true = Imersivo/Tela Cheia, false = Split)
+  Future<bool> isViewModeImmersive() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_viewModeImmersiveKey) ?? true;
+  }
+
+  Future<void> setViewModeImmersive(bool immersive) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_viewModeImmersiveKey, immersive);
   }
 
   // Método auxiliar para obter chave de armazenamento baseada no tipo de layout
